@@ -24,3 +24,12 @@
 - 当前课程素材的完整链路（导入 → 字幕 → AI 候选 → 多草稿 → 预览 → 成片/封面导出）仍待下一轮在用户指定素材上验证。
 - 远端转写未执行；需要用户明确服务地址和允许上传音频后再验证。
 - 下载器剪辑入口已在独立下载器项目的 0.8.0 中清理，下载器现有门禁已通过。
+
+## 自动构建与开发预览发布
+
+验证日期：2026-11-06（Asia/Shanghai）
+
+- 本机 Windows：`pnpm check` 通过；`pnpm engine:build` 与 `pnpm exec electron-builder --publish never` 通过，生成 x64 NSIS 安装包。
+- GitHub Actions [运行 42176515966](https://github.com/bhwa233/galaxy-clipper/actions/runs/42176515966)：`verify`、Windows、macOS、Linux 构建及 Release 任务全部成功，基于提交 `924575aea5c587057def0ce5ba81cd4f6069f679`。
+- [0.1.0 开发预览](https://github.com/bhwa233/galaxy-clipper/releases/tag/0.1.0) 已发布 Windows x64 NSIS、macOS arm64 DMG 和 Linux x64 AppImage。
+- 该发布未验证课程素材完整流程、远端转写或云端服务；三个平台安装包尚未逐一进行安装后运行验收。
