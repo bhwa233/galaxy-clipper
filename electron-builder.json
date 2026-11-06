@@ -1,0 +1,13 @@
+{
+  "appId": "com.bhwa233.galaxy-clipper",
+  "productName": "Galaxy Clipper",
+  "asar": true,
+  "directories": { "output": "release/${version}" },
+  "files": ["dist", "dist-electron", "!**/*.log"],
+  "extraResources": [{"from": "resources/engine", "to": "engine"}],
+  "win": {"target": "nsis"},
+  "mac": {"target": "dmg", "category": "public.app-category.video"},
+  "linux": {"target": "AppImage", "category": "AudioVideo"},
+  "nsis": {"oneClick": false, "allowToChangeInstallationDirectory": true, "deleteAppDataOnUninstall": false},
+  "publish": null
+}

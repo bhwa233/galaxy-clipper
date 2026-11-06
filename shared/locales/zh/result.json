@@ -1,0 +1,185 @@
+{
+  "title": "解析结果",
+  "preview": "预览",
+  "openingPage": "正在打开页面…",
+  "about": "约 {{size}}",
+  "groups": {
+    "work": "单视频",
+    "parts": "多P",
+    "collection": "合集",
+    "files": "文件",
+    "uploads": "作品",
+    "shorts": "短视频",
+    "streams": "直播",
+    "shows": "短剧"
+  },
+  "menu": {
+    "downloadOne": "下载这一项",
+    "select": "选中",
+    "deselect": "取消选中",
+    "selectToHere": "选中到这里",
+    "copyTitle": "复制标题",
+    "copyCover": "复制封面地址",
+    "saveCover": "保存封面…"
+  },
+  "copied": {
+    "title": "标题已复制",
+    "cover": "封面地址已复制"
+  },
+  "card": {
+    "select": "选择 {{title}}",
+    "preview": "预览 {{title}}"
+  },
+  "locked": "「{{title}}」不能下载。",
+  "quality": {
+    "count_other": "{{count}} 种画质",
+    "original": "原始图片",
+    "best": "最佳画质",
+    "label": "下载画质",
+    "reading": "正在读取画质…",
+    "default": "默认画质（按设置）"
+  },
+  "audioQuality": {
+    "language": "音频语言",
+    "separateFileHint": "音频语言和音质用于单独保存的音频文件。",
+    "original": "原声",
+    "unknownLanguage": "未标注语言",
+    "levels": {
+      "high": "高音质",
+      "standard": "标准音质",
+      "low": "低音质"
+    },
+    "label": "音质（原始音轨）",
+    "best": "最高音质（原始音轨）",
+    "bestForLanguage": "最高音质（当前语言）",
+    "reading": "正在读取音质…"
+  },
+  "loadedOf": "共 {{total}} 项，已加载 {{loaded}} 项",
+  "keywordLabel": "按关键字筛选",
+  "keywordPlaceholder": "关键字…",
+  "published": "发布时间",
+  "periods": {
+    "all": "全部时间",
+    "week": "一周内",
+    "month": "一个月内",
+    "quarter": "三个月内",
+    "year": "一年内"
+  },
+  "listView": "结果列表视图",
+  "gridView": "结果缩略图视图",
+  "duration": "时长",
+  "durations": {
+    "all": "全部时长",
+    "short": "1 分钟以内",
+    "medium": "1–10 分钟",
+    "long": "10 分钟以上",
+    "custom": "自定义…"
+  },
+  "customDuration": {
+    "title": "自定义时长",
+    "description": "留空表示不限，两端都包含，按分钟计。",
+    "min": "最短（分钟）",
+    "max": "最长（分钟）",
+    "unlimited": "不限",
+    "between": "{{min}}–{{max}} 分钟",
+    "under": "≤ {{max}} 分钟",
+    "over": "≥ {{min}} 分钟",
+    "apply": "应用"
+  },
+  "clearResult": "清除解析结果",
+  "onlyAll": "全部",
+  "truncated": {
+    "title_other": "只列出了前 {{count}} 条",
+    "total": "这个列表共 {{total}} 条，解析到上限就停下了。",
+    "limit": "解析到条数上限就停下了，后面可能还有内容。",
+    "hint": "要取更靠后的内容，请直接粘贴那一条的链接。"
+  },
+  "noMatch": "没有符合筛选条件的内容",
+  "loadMoreFailed": "加载更多未完成",
+  "loading": "正在加载…",
+  "loadMore": "加载更多",
+  "selectAll": "全选",
+  "selected": "已选 {{count}}",
+  "capNote_other": "，将入队前 {{count}} 项",
+  "skipped": "（{{list}}，会跳过）",
+  "listSeparator": "，",
+  "missing": {
+    "video_other": "{{count}} 项没有视频",
+    "audio_other": "{{count}} 项没有音频",
+    "cover_other": "{{count}} 项没有封面"
+  },
+  "downloadContent": "下载内容",
+  "saveTo": "保存到：{{dir}}（点击更改）",
+  "download": {
+    "pictures_other": "下载 {{count}} 项图片",
+    "files_other": "下载 {{count}} 个文件",
+    "items_other": "下载 {{count}} 项",
+    "audio_other": "下载 {{count}} 个音频",
+    "cover_other": "下载 {{count}} 个封面",
+    "process_other": "下载并处理 {{count}} 项",
+    "process_one": "下载并处理 {{count}} 项"
+  },
+  "toast": {
+    "queued": "已加入下载队列",
+    "queuedKind": "已加入下载队列（{{kind}}）",
+    "started_other": "{{count}} 个任务已开始，可在全部任务中查看。",
+    "alsoQueued_other": "另有 {{count}} 个已在队列中。",
+    "inQueue": "已在下载队列中",
+    "allInQueue_other": "这 {{count}} 个任务都已经在下载，没有重复添加。",
+    "oneInQueue": "「{{title}}」的{{kind}}已经在下载。"
+  },
+  "attachSubtitles": "附带平台字幕",
+  "query": {
+    "keyword": "搜索整个列表的标题…",
+    "sortLabel": "列表排序",
+    "sorts": {
+      "original": "合集原顺序",
+      "reverse": "合集倒序"
+    },
+    "unlimited": "不限",
+    "more": "更多筛选",
+    "find": "查找",
+    "clearDates": "清除日期",
+    "clearKind": "清除类型",
+    "clearDuration": "清除时长",
+    "minutes": "分钟",
+    "pending": "条件已更改，点击「查找」应用到整个列表。",
+    "scope": "查找整个列表，包含尚未加载的内容。",
+    "partialOrder": "当前为部分结果，读取完成后才能确认完整顺序。",
+    "status": {
+      "ready": "已读取 {{scanned}} 项，当前显示 {{matched}} 项",
+      "running": "正在查找整个列表 · 已检查 {{scanned}} 项 · 找到 {{matched}} 项",
+      "stopped": "查找已停止 · 已检查 {{scanned}} 项 · 找到 {{matched}} 项（部分结果）",
+      "completed": "查找完成 · 共检查 {{scanned}} 项 · 找到 {{matched}} 项",
+      "interrupted": "查找中断 · 已检查 {{scanned}} 项 · 已保留 {{matched}} 项",
+      "limited": "仅取得部分结果 · 已检查 {{scanned}} 项 · 找到 {{matched}} 项"
+    },
+    "limitHint": "平台未提供完整或可继续读取的列表；自动生成的 Mix 也没有固定终点。当前结果不代表整个列表。",
+    "missingDates_other": "有 {{count}} 项缺少发布时间：日期查找不包含这些条目，时间排序将它们放在末尾。",
+    "stop": "停止",
+    "continue": "继续查找",
+    "scanProgress": "整个列表查找进度",
+    "dateTitle": "按发布时间查找",
+    "dateHint": "使用本机时区，包含开始和结束日期当天。任意一端留空表示不限。",
+    "presets": {
+      "week": "近一周",
+      "month": "近一月",
+      "quarter": "近三月",
+      "thisYear": "今年",
+      "lastYear": "去年"
+    },
+    "from": "开始日期",
+    "to": "结束日期",
+    "invalidDates": "结束日期不能早于开始日期。",
+    "applyFind": "应用并查找",
+    "kind": "媒体类型",
+    "searchingEmpty": "还没有找到匹配项，正在继续查找…",
+    "selectFound": "全选已找到的 {{count}} 项",
+    "hiddenSelected": "{{count}} 项不在当前结果",
+    "reviewSelected": "查看已选",
+    "reviewHint": "已选 {{count}} 项，包含其他分组和被筛选隐藏的内容，可在这里取消选择。",
+    "clearSelection": "清空选择",
+    "downloadFirst": "下载前 {{count}} 项",
+    "nativeOrder": "按平台提供的合集倒序加载，可继续加载更多。"
+  }
+}

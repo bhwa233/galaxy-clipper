@@ -1,0 +1,200 @@
+{
+  "title": "Parse result",
+  "preview": "Preview",
+  "openingPage": "Opening page…",
+  "about": "≈ {{size}}",
+  "groups": {
+    "work": "Single video",
+    "parts": "Multi-part",
+    "collection": "Collection",
+    "files": "Files",
+    "uploads": "Posts",
+    "shorts": "Shorts",
+    "streams": "Streams",
+    "shows": "Shows"
+  },
+  "menu": {
+    "downloadOne": "Download this item",
+    "select": "Select",
+    "deselect": "Deselect",
+    "selectToHere": "Select up to here",
+    "copyTitle": "Copy title",
+    "copyCover": "Copy cover URL",
+    "saveCover": "Save cover…"
+  },
+  "copied": {
+    "title": "Title copied",
+    "cover": "Cover URL copied"
+  },
+  "card": {
+    "select": "Select {{title}}",
+    "preview": "Preview {{title}}"
+  },
+  "locked": "“{{title}}” can't be downloaded.",
+  "quality": {
+    "count_one": "{{count}} quality",
+    "count_other": "{{count}} qualities",
+    "original": "Original image",
+    "best": "Best quality",
+    "label": "Download quality",
+    "reading": "Reading qualities…",
+    "default": "Default quality"
+  },
+  "audioQuality": {
+    "language": "Audio language",
+    "separateFileHint": "Audio language and quality apply to the separately saved audio file.",
+    "original": "Original",
+    "unknownLanguage": "Unspecified language",
+    "levels": {
+      "high": "High quality",
+      "standard": "Standard quality",
+      "low": "Low quality"
+    },
+    "label": "Audio quality (source track)",
+    "best": "Best source audio",
+    "bestForLanguage": "Best audio for this language",
+    "reading": "Reading audio qualities…"
+  },
+  "loadedOf": "{{loaded}} of {{total}} loaded",
+  "keywordLabel": "Filter by keyword",
+  "keywordPlaceholder": "Keyword…",
+  "published": "Published",
+  "periods": {
+    "all": "Any time",
+    "week": "Past week",
+    "month": "Past month",
+    "quarter": "Past 3 months",
+    "year": "Past year"
+  },
+  "listView": "List view",
+  "gridView": "Thumbnail view",
+  "duration": "Duration",
+  "durations": {
+    "all": "Any duration",
+    "short": "Under 1 min",
+    "medium": "1–10 min",
+    "long": "Over 10 min",
+    "custom": "Custom…"
+  },
+  "customDuration": {
+    "title": "Custom duration",
+    "description": "Leave a field empty for no limit. Both ends are included; time is in minutes.",
+    "min": "Shortest (min)",
+    "max": "Longest (min)",
+    "unlimited": "No limit",
+    "between": "{{min}}–{{max}} min",
+    "under": "≤ {{max}} min",
+    "over": "≥ {{min}} min",
+    "apply": "Apply"
+  },
+  "clearResult": "Clear parse result",
+  "onlyAll": "All",
+  "truncated": {
+    "title_one": "Only the first {{count}} entry is listed",
+    "title_other": "Only the first {{count}} entries are listed",
+    "total": "This list has {{total}} entries; parsing stopped at the limit.",
+    "limit": "Parsing stopped at the entry limit; there may be more after it.",
+    "hint": " To get a later one, paste its own link."
+  },
+  "noMatch": "Nothing matches the filters",
+  "loadMoreFailed": "Couldn't load more",
+  "loading": "Loading…",
+  "loadMore": "Load more",
+  "selectAll": "Select all",
+  "selected": "Selected {{count}}",
+  "capNote_one": ", only the first {{count}} will be queued",
+  "capNote_other": ", only the first {{count}} will be queued",
+  "skipped": " ({{list}}; will be skipped)",
+  "listSeparator": ", ",
+  "missing": {
+    "video_one": "{{count}} item has no video",
+    "video_other": "{{count}} items have no video",
+    "audio_one": "{{count}} item has no audio",
+    "audio_other": "{{count}} items have no audio",
+    "cover_one": "{{count}} item has no cover",
+    "cover_other": "{{count}} items have no cover"
+  },
+  "downloadContent": "Download content",
+  "saveTo": "Save to: {{dir}} (click to change)",
+  "download": {
+    "pictures_one": "Download {{count}} image",
+    "pictures_other": "Download {{count}} images",
+    "files_one": "Download {{count}} file",
+    "files_other": "Download {{count}} files",
+    "items_one": "Download {{count}} item",
+    "items_other": "Download {{count}} items",
+    "audio_one": "Download {{count}} audio file",
+    "audio_other": "Download {{count}} audio files",
+    "cover_one": "Download {{count}} cover",
+    "cover_other": "Download {{count}} covers",
+    "process_other": "Download & process {{count}} items",
+    "process_one": "Download & process {{count}} item"
+  },
+  "toast": {
+    "queued": "Added to the download queue",
+    "queuedKind": "Added to the download queue ({{kind}})",
+    "started_one": "{{count}} task started. See it in All tasks.",
+    "started_other": "{{count}} tasks started. See them in All tasks.",
+    "alsoQueued_one": " {{count}} more was already in the queue.",
+    "alsoQueued_other": " {{count}} more were already in the queue.",
+    "inQueue": "Already in the download queue",
+    "allInQueue_one": "This task is already downloading; nothing was added twice.",
+    "allInQueue_other": "All {{count}} tasks are already downloading; nothing was added twice.",
+    "oneInQueue": "“{{title}}” ({{kind}}) is already downloading."
+  },
+  "attachSubtitles": "Attach platform captions",
+  "query": {
+    "keyword": "Search titles across the entire list…",
+    "sortLabel": "List order",
+    "sorts": {
+      "original": "Collection order",
+      "reverse": "Reverse collection order"
+    },
+    "unlimited": "Any",
+    "more": "More filters",
+    "find": "Find",
+    "clearDates": "Clear dates",
+    "clearKind": "Clear type",
+    "clearDuration": "Clear duration",
+    "minutes": "min",
+    "pending": "Filters changed. Choose Find to apply them to the entire list.",
+    "scope": "Search the entire list, including items not loaded yet.",
+    "partialOrder": "Partial results. The complete order is confirmed after reading finishes.",
+    "status": {
+      "ready": "Read {{scanned}} items · Showing {{matched}}",
+      "running": "Searching the entire list · Checked {{scanned}} · Found {{matched}}",
+      "stopped": "Search stopped · Checked {{scanned}} · Found {{matched}} (partial results)",
+      "completed": "Search complete · Checked {{scanned}} · Found {{matched}}",
+      "interrupted": "Search interrupted · Checked {{scanned}} · Kept {{matched}} results",
+      "limited": "Partial results only · Checked {{scanned}} · Found {{matched}}"
+    },
+    "limitHint": "The platform did not provide a complete list or a usable continuation. Generated Mix lists have no fixed end. These results do not represent the entire list.",
+    "missingDates_other": "{{count}} items have no publication date: date searches exclude them and date sorting puts them last.",
+    "stop": "Stop",
+    "continue": "Continue search",
+    "scanProgress": "Entire list search progress",
+    "dateTitle": "Find by publication date",
+    "dateHint": "Uses your local time zone and includes both dates. Leave either end blank for no limit.",
+    "presets": {
+      "week": "Past week",
+      "month": "Past month",
+      "quarter": "Past three months",
+      "thisYear": "This year",
+      "lastYear": "Last year"
+    },
+    "from": "Start date",
+    "to": "End date",
+    "invalidDates": "The end date must not precede the start date.",
+    "applyFind": "Apply and find",
+    "kind": "Media type",
+    "searchingEmpty": "No matches yet. Still searching…",
+    "selectFound": "Select all {{count}} found items",
+    "hiddenSelected": "{{count}} outside the current results",
+    "reviewSelected": "Review selection",
+    "reviewHint": "{{count}} items selected, including hidden items and other groups. Deselect them here.",
+    "clearSelection": "Clear selection",
+    "downloadFirst": "Download first {{count}} items",
+    "nativeOrder": "Loaded in the platform’s reverse collection order. Load more to continue.",
+    "missingDates_one": "1 item has no publication date: date searches exclude it and date sorting puts it last."
+  }
+}

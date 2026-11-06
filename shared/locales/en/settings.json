@@ -1,0 +1,239 @@
+{
+  "title": "Settings",
+  "description": "Save to apply changes. Download and processing defaults affect new tasks only.",
+  "unsaved": "Unsaved changes",
+  "invalid": "Check input limits and the filename template.",
+  "helpFor": "About {{label}}",
+  "advanced": {
+    "general": "Behavior & display", "download": "Other download settings", "files": "Folders & covers",
+    "transcription": "Local transcription", "output": "File information & covers", "accounts": "Session management", "diagnostics": "Diagnostics and logs"
+  },
+  "subscriptions": { "intervalHint": "Checks every 24 hours by default." },
+  "sections": {
+    "subscriptions": "Subscriptions",
+    "general": "General",
+    "download": "Download",
+    "files": "Files & media",
+    "browser": "Sign-in & accounts",
+    "tools": "Updates & advanced",
+    "editing": "Editing & subtitles"
+  },
+  "general": {
+    "saveLocation": "Save location",
+    "saveLocationHint": "Used for new tasks after saving settings.",
+    "chooseDirectory": "Choose the save location through the folder picker.",
+    "resumeOnStart": {
+      "label": "Resume tasks on startup",
+      "hint": "Continue the tasks that were downloading or queued when the app last quit."
+    },
+    "notifications": {
+      "label": "Notify when downloads finish",
+      "hint": "Show a system notification when a file is saved."
+    },
+    "minimizeToTray": {
+      "label": "Keep downloading after closing the window",
+      "hint": "Minimize to the system tray; quit from the tray menu."
+    },
+    "keepHistory": {
+      "label": "Keep parse history",
+      "hint": "Keep successfully parsed links on this computer for reuse."
+    },
+    "workMode": {
+      "label": "Work mode",
+      "downloadHint": "Save original media without subtitles or transcoding.",
+      "editHint": "Use platform subtitles, local transcription and video exports while preserving originals."
+    }
+  },
+  "download": {
+    "concurrency": {
+      "label": "Simultaneous downloads",
+      "hint": "Up to 4 tasks download in parallel."
+    },
+    "speedLimit": {
+      "label": "Global speed limit (KiB/s)",
+      "hint": "0 means unlimited."
+    },
+    "taskSpeedLimit": {
+      "label": "Default per-task speed limit (KiB/s)",
+      "hint": "0 means unlimited; can be adjusted per task in task details."
+    },
+    "timeout": {
+      "label": "Connection timeout (seconds)",
+      "hint": "Retry when a connection or media read stalls for too long."
+    },
+    "retries": {
+      "label": "Download retries",
+      "hint": "Retry after a file or fragment fails; once exhausted you can retry manually."
+    },
+    "batchLimit": {
+      "label": "Batch limit",
+      "hint": "Queue the first N selected items per click; 0 means no limit."
+    }
+  },
+  "files": {
+    "naming": {
+      "label": "File naming",
+      "titleId": "Title-Task ID",
+      "idTitle": "Task ID-Title",
+      "dateTitleId": "Date-Title-Task ID"
+    },
+    "namingHint": "The task ID prevents files with the same name overwriting each other. Retries reuse the original file name and resume where supported.",
+    "organizeByPlatform": {
+      "label": "Subfolder per platform",
+      "hint": "New tasks are saved to the matching platform folder."
+    },
+    "organizeByCollection": {
+      "label": "Subfolder per collection",
+      "hint": "Keep each collection or multipart video in its own folder."
+    },
+    "videoQuality": {
+      "label": "Default video quality",
+      "best": "Best available quality",
+      "upTo": "Up to {{height}}p"
+    },
+    "audioFormat": {
+      "label": "Audio format",
+      "best": "Best quality (no conversion)",
+      "convert": "Convert to {{format}}"
+    },
+    "mergeHint": "Separate video and audio streams are merged automatically. Photo posts keep the original image format.",
+    "cover": {
+      "legend": "Cover",
+      "save": {
+        "label": "Save the cover image with videos",
+        "hint": "Store a cover image with the same name next to the video."
+      },
+      "embedVideo": {
+        "label": "Embed the cover in video files",
+        "hint": "Make the cover the video file's own artwork; some players and File Explorer don't read MP4 cover tracks."
+      },
+      "embedAudio": {
+        "label": "Embed the cover in audio-only downloads",
+        "hint": "Audio files carry the cover, shown by players as album art."
+      },
+      "format": {
+        "label": "Cover format",
+        "original": "Platform's original format",
+        "jpg": "Always convert to JPG"
+      },
+      "hint": "Most platforms serve WebP, which Windows File Explorer thumbnails inconsistently. Photo posts get no extra cover, since the post itself is images. \"Download cover\" in a task's context menu is always available, regardless of these switches."
+    },
+    "subtitles": {
+      "legend": "Subtitles",
+      "label": "Subtitles",
+      "embed": "Soft subtitles (switchable)",
+      "burn": "Hard subtitles (permanent)",
+      "languageOptions": {
+        "en": "English",
+        "zh": "Chinese",
+        "bilingual": "Chinese + English"
+      },
+      "file": "Save as separate subtitle file",
+      "off": "Don't download subtitles",
+      "languages": "Subtitle languages",
+      "languagesPlaceholder": "Leave empty to follow the interface language",
+      "languagesHint": "Comma-separated, in order of priority; enter all to download every language.",
+      "autoGenerated": {
+        "label": "Use auto-generated subtitles",
+        "hint": "Fall back to the platform's speech-recognition subtitles when a language has no human-made ones."
+      },
+      "normalize": {
+        "label": "Normalize overlapping subtitle cues",
+        "hint": "Join YouTube rolling caption fragments so one language does not render twice at once."
+      },
+      "hint": "Uses captions provided by the platform, including platform-generated captions when enabled. No client-side translation. Embedded or burned captions affect only the output, leaving the source intact."
+    },
+    "cleanNaming": {
+      "mode": "Naming style",
+      "presets": {
+        "title": "Title only",
+        "title-author": "Title + author name",
+        "title-author-date": "Title + author name + publication date",
+        "custom": "Custom"
+      },
+      "template": "Custom filename",
+      "templateHint": "Click a field to insert it. title is the title, author is the author name, and date is the publication date; authorId is the author account and id identifies the item.",
+      "invalidTemplate": "Enter a template using the listed fields, without path separators or ..",
+      "preview": "Filename preview",
+      "example": "Example",
+      "sampleTitle": "How to photograph a city at night",
+      "sampleAuthor": "Example author",
+      "collision": "If the name exists: {{filename}}",
+      "nicknameFallback": "The platform did not provide an author ID; the author name will be used.",
+      "noAuthor": "The author name is unavailable; it will be omitted.",
+      "noDate": "The publication date is unavailable; the date will be omitted.",
+      "hint": "New tasks have no random suffix. Duplicate names receive (2), (3), etc. Queued tasks keep their names. The extension depends on the media."
+    }
+  },
+  "browser": {
+    "sessions_one": "Saved sessions for {{count}} site",
+    "sessions_other": "Saved sessions for {{count}} sites",
+    "noSessions": "No saved sessions. Sign in through the app when needed.",
+    "sessionsHint": "For content that requires signing in, sign in once in the app; the sign-in session is stored on this computer and survives restarts.",
+    "clearSessions": "Clear sign-in sessions"
+  },
+  "appearance": {
+    "theme": {
+      "label": "Theme",
+      "system": "Follow system",
+      "light": "Light",
+      "dark": "Dark"
+    },
+    "resultView": {
+      "label": "Parse result view",
+      "auto": "Auto (by content)",
+      "list": "List",
+      "grid": "Thumbnails"
+    },
+    "density": {
+      "label": "List density",
+      "comfortable": "Comfortable",
+      "compact": "Compact"
+    }
+  },
+  "tools": {
+    "kernelAutomatic": "Automatic kernel updates",
+    "kernelAutomaticHint": "Check official stable releases weekly. Verify before use in new tasks; keep the current kernel on failure.",
+    "kernelChecking": "Checking for updates…",
+    "kernelDownloading": "Updating kernel",
+    "checking": "Checking",
+    "localHint": "Local tools update with the app; downloading and parsing run on this computer.",
+    "checkTools": "Check tools",
+    "checkUpdate": "Check for updates",
+    "downloadUpdate": "Download {{version}}",
+    "installUpdate": "Restart to install",
+    "verboseLogging": {
+      "label": "Verbose logging",
+      "hint": "Record request details for troubleshooting. Credentials are redacted and logs stay on this computer."
+    },
+    "openLogs": "Open log folder",
+    "exportLogs": "Export diagnostics log",
+    "allowControl": {
+      "label": "Command line & agents",
+      "hint": "Set up the galaxy command for terminals and agents. Only the current user on this computer can connect."
+    },
+    "commandLine": {
+      "configuring": "Setting up the command line…",
+      "ready": "Enabled. Run galaxy in a new terminal.",
+      "disabled": "Command line and agent control is disabled.",
+      "needsSetup": "The command is not ready. Retry setup.",
+      "failed": "Command line setup failed. Retry or check diagnostics logs.",
+      "channelFailed": "The command line connection is unavailable. Close other clients and retry.",
+      "enableFirst": "Enable and save command line and agent control first.",
+      "retry": "Retry command line setup"
+    }
+  },
+  "saving": "Saving…",
+  "save": "Save settings",
+  "saved": "Settings saved",
+  "editing": {
+    "languageHint": "For example zh, en; up to 5 languages.",
+    "modelHint": "Models download on demand. Audio is processed on this computer.",
+    "hint": "Export to a new file and preserve the original. Video processing uses these format and resolution defaults.",
+    "outputFormat": "Video output format",
+    "originalFormat": "Keep original format",
+    "outputResolution": "Output resolution",
+    "originalResolution": "Keep original resolution",
+    "resolutionHint": "Resolution only decreases, capped by the shorter edge. Aspect ratio is preserved without stretching or cropping."
+  }
+}

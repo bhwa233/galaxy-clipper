@@ -1,0 +1,126 @@
+import { spawn } from 'node:child_process'
+import { createInterface } from 'node:readline'
+import { existsSync } from 'node:fs'
+import path from 'node:path'
+import { logger } from './log'
+import { i18n } from '../../shared/i18n'
+
+const log = logger('engine')
+
+export type EngineEvent = { kind: string; code?: string; message?: string; status?: string; progress?: number; result?: unknown }
+export type EngineRequest = {
+  operation: 'version' | 'unpack' | 'inspect' | 'audio' | 'audio-chunk' | 'clip-render' | 'embedded-captions' | 'render';
+  input?: string; output?: string; startMs?: number; durationMs?: number; archiveFiles?: string[];
+  scenes?: import('../../shared/clipping').Draft['scenes']; clipSettings?: import('../../shared/clipping').DraftSettings;
+  clipCaptions?: import('../../shared/processing').Caption[]; preview?: boolean; clipTaskId?: string; workDirectory?: string;
+  captionFile?: string; captionFiles?: {file: string; language: string}[]; renderMode?: 'soft' | 'burn' | 'video'; outputResolution?: string;
+}
+
+export function redact(message: string): string {
+  return message.replace(/https?:\/\/[^\s"'<>]+/gi, value => {
+    try { const url = new URL(value); return `${url.origin}${url.pathname}${url.search ? '?[redacted]' : ''}` } catch { return '[url]' }
+  }).replace(/((?:cookie|authorization|token|password)\s*[:=]\s*)[^\r\n]+/gi, '$1[redacted]').slice(0, 2000)
+}
+
+export class EngineProtocolError extends Error {}
+
+// Node's process API provides bounded pipes and cancellation; no shell wrapper or command-string library is needed.
+export function runProcess<T>(executable: string, args: string[], input: unknown, signal?: AbortSignal, onEvent?: (event: EngineEvent) => void, timeout = 120_000): Promise<T> {
+  signal?.throwIfAborted()
+  return new Promise((resolve, reject) => {
+    const child = spawn(executable, args, { shell: false, windowsHide: true, detached: process.platform !== 'win32', stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env, ELECTRON_RUN_AS_NODE: '1', PYTHONUNBUFFERED: '1', PYTHONUTF8: '1', PYTHONIOENCODING: 'utf-8' } })
+    child.stdout.setEncoding('utf8'); child.stderr.setEncoding('utf8')
+    let result: T | undefined
+    let error = ''
+    let protocolFailure = false
+    let failureCode: string | undefined
+    let bytes = 0
+    let timedOut = false
+    let stopping: Promise<void> | undefined
+    const started = Date.now()
+    // What the call was for, without the cookies and headers it carries.
+    const request = input as { operation?: string; url?: string } | undefined
+    const label = `${request?.operation || path.basename(executable)}${request?.url ? ` ${request.url}` : ''}`
+    log.debug(`开始 ${label}`)
+    const stop = () => {
+      if (!child.pid || stopping) return
+      if (process.platform === 'win32') stopping = new Promise<void>(done => {
+        const killer = spawn('taskkill', ['/pid', String(child.pid), '/T', '/F'], { windowsHide: true, stdio: 'ignore' })
+        killer.once('close', () => done())
+        killer.once('error', () => { child.kill(); done() })
+      })
+      else { try { process.kill(-child.pid, 'SIGTERM') } catch { child.kill() } }
+    }
+    const timer = setTimeout(() => { timedOut = true; stop() }, timeout)
+    signal?.addEventListener('abort', stop, { once: true })
+    const output = createInterface({ input: child.stdout })
+    output.on('line', line => {
+      bytes += line.length
+      if (bytes > 32 * 1024 * 1024) { error = i18n.t('queue:errors.engineOutputTooLarge'); stop(); return }
+      try {
+        const event = JSON.parse(line) as EngineEvent
+        if (event.kind === 'result') result = event.result as T
+        else if (event.kind === 'error') { failureCode = event.code; protocolFailure ||= event.code === 'protocol'; error = redact(event.message || i18n.t('queue:errors.engineFailed')) }
+        else {
+          // yt-dlp's own messages. A caller that listens - a download - files them in the job's log,
+          // which reaches this file too; progress ticks are left out, there are hundreds of them.
+          if (!onEvent && event.kind === 'log' && event.message) log.debug(`yt-dlp：${event.message}`)
+          onEvent?.(event)
+        }
+      } catch { log.debug(`非协议输出：${line.slice(0, 500)}`) }
+    })
+    child.stderr.on('data', chunk => { error = (error + redact(String(chunk))).slice(-4000) })
+    child.stdin.on('error', () => { /* Early process exit is handled by close. */ })
+    child.on('error', failure => { error = failure.message; failureCode = (failure as NodeJS.ErrnoException).code })
+    child.on('close', async code => {
+      clearTimeout(timer)
+      signal?.removeEventListener('abort', stop)
+      output.close()
+      // The onefile bootloader can close before taskkill has stopped FFmpeg.
+      // Join the tree termination before callers clean up files opened by descendants.
+      await stopping
+      const took = `${Date.now() - started}ms`
+      if (signal?.aborted) { log.info(`取消 ${label} ${took}`); reject(new DOMException(i18n.t('queue:errors.cancelled'), 'AbortError')) }
+      else if (timedOut) { log.warn(`超时 ${label} ${took}`); reject(new Error(i18n.t('queue:errors.timeout'))) }
+      else if (code !== 0 || result === undefined) {
+        log.warn(`失败 ${label} 退出码 ${code} ${took}：${error.slice(-1500)}`)
+        const failure = protocolFailure ? new EngineProtocolError(i18n.t('queue:errors.engineProtocol')) : new Error(error || i18n.t('queue:errors.engineExited', { code: String(code) }))
+        if (failureCode) Object.assign(failure, { code: failureCode })
+        reject(failure)
+      }
+      else { log.info(`完成 ${label} ${took}`); resolve(result) }
+    })
+    child.stdin.end(JSON.stringify(input), 'utf8')
+  })
+}
+
+export class Engine {
+  // YouTube serves machine-translated titles and descriptions, defaulting to English. The interface
+  // language decides which translation the extractor asks for.
+  constructor(private root: string, private resources: string, private packaged: boolean, private locale: () => string = () => 'en') {}
+
+  get ffmpeg(): string {
+    const name = process.platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg'
+    const bundled = path.join(this.resources, 'engine', name)
+    const prepared = path.join(this.root, 'resources', 'engine', name)
+    const local = path.join(this.root, 'node_modules', 'ffmpeg-static', name)
+    // Development uses the same prepared FFmpeg as packaging, including platform fixes.
+    if (!this.packaged && existsSync(prepared)) return prepared
+    if (existsSync(bundled)) return bundled
+    if (!this.packaged && existsSync(local)) return local
+    throw new Error(i18n.t('queue:errors.ffmpegMissing'))
+  }
+
+  private get command(): [string, string[]] {
+    const binary = path.join(this.resources, 'engine', process.platform === 'win32' ? 'media-engine.exe' : 'media-engine')
+    if (existsSync(binary)) return [binary, []]
+    const python = path.join(this.root, '.venv', process.platform === 'win32' ? 'Scripts/python.exe' : 'bin/python')
+    if (!this.packaged && existsSync(python)) return [python, [path.join(this.root, 'engine/main.py')]]
+    throw new Error(i18n.t('queue:errors.engineMissing'))
+  }
+
+  request<T>(request: EngineRequest, signal?: AbortSignal, onEvent?: (event: EngineEvent) => void): Promise<T> {
+    const [executable, args] = this.command
+    return runProcess<T>(executable, args, { ...request, locale: this.locale(), ffmpeg: request.operation === 'version' ? undefined : this.ffmpeg, node: process.execPath }, signal, onEvent, ['download', 'process', 'render', 'clip-render', 'audio', 'audio-chunk', 'unpack'].includes(request.operation) ? 24 * 60 * 60 * 1000 : 120_000)
+  }
+}
