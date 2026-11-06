@@ -1,12 +1,17 @@
 """Offline media operations. Every input path is resolved and authorized by Electron main."""
+import math
 import os
 import re
 import shutil
 import subprocess
+import sys
 import tarfile
 import tempfile
+import time
 from fractions import Fraction
 from pathlib import Path
+
+from subtitles import compose_bilingual, read_cues, write_ass, write_srt
 
 
 def inspect(ffmpeg, source, details=False):
@@ -17,6 +22,10 @@ def inspect(ffmpeg, source, details=False):
     metadata = {'durationSeconds': duration, 'video': bool(re.search(r'Stream .*Video:', text)),
                 'subtitles': [{'index': int(found[1]), 'language': found[2] or 'und'}
                               for found in re.finditer(r'Stream #0:(\d+)(?:\[[^\]]*\])?(?:\(([^)]+)\))?: Subtitle:', text)]}
+    # Downloaders that embed metadata (yt-dlp, Galaxy Downloader) record the page URL.
+    page = re.search(r'^\s*(?:purl|comment|description)\s*:\s*(https?://\S+)\s*$', text, re.MULTILINE | re.IGNORECASE)
+    if page:
+        metadata['sourceUrl'] = page[1]
     if details:
         # Reuse the bundled FFmpeg's structured frame-checksum stream headers.
         streams = subprocess.run([ffmpeg, '-v', 'error', '-i', source, '-map', '0:v:0?', '-map', '0:a:0?',
@@ -86,58 +95,124 @@ def run(request, emit):
         return
     if operation != 'render':
         raise ValueError('Unknown local media operation')
+    render(request, emit, ffmpeg, source, metadata)
+
+
+def bundled_fonts(ffmpeg):
+    for folder in (Path(getattr(sys, '_MEIPASS', Path(__file__).parent)) / 'fonts', Path(sys.executable).parent / 'fonts', Path(ffmpeg).parent / 'fonts'):
+        if (folder / 'NotoSansCJKsc-Bold.otf').is_file():
+            return folder
+    raise ValueError('Subtitle font is missing; reinstall the client')
+
+
+def run_ffmpeg(args, directory, emit, duration):
+    """Run FFmpeg with progress and an ETA smoothed from measured encode speed."""
+    started, rate = time.monotonic(), None
+    with tempfile.TemporaryFile() as errors:
+        process = subprocess.Popen(args, cwd=directory, stdout=subprocess.PIPE, stderr=errors, text=True, encoding='utf-8')
+        for line in process.stdout:
+            if line.startswith('out_time_us=') and duration:
+                try:
+                    position = max(0, int(line.split('=')[1]) / 1_000_000)
+                except ValueError:
+                    continue
+                elapsed = time.monotonic() - started
+                # Wait for real work before estimating, then smooth changing
+                # encode speeds instead of assuming a fixed ratio.
+                if elapsed >= 3 and position > 0:
+                    sample = position / elapsed
+                    rate = sample if rate is None else rate * 0.8 + sample * 0.2
+                eta = math.ceil(max(0, duration - position) / rate) if rate else None
+                emit('processing', status='exporting', progress=min(.99, position / duration), eta=eta)
+        if process.wait() != 0:
+            errors.seek(0)
+            raise RuntimeError(errors.read().decode('utf-8', 'replace')[-4000:])
+
+
+def language_code(language):
+    base = language.lower().split('-')[0]
+    return {'zh': 'zho', 'en': 'eng'}.get(base, base if len(base) == 3 else 'und')
+
+
+def render(request, emit, ffmpeg, source, metadata):
     output = Path(request['output'])
     if output.resolve() == Path(source).resolve() or output.exists():
         raise ValueError('Output must be a new file')
     mode = request.get('renderMode', 'video')
     if not metadata['video']:
         raise ValueError('The source has no video stream')
+    mp4 = output.suffix.lower() in ('.mp4', '.m4v', '.mov')
+    # Each track: {file, language, role: zh|en|other}. Roles decide bilingual pairing.
+    tracks = request.get('captionTracks') or []
+    zh = next((track for track in tracks if track['role'] == 'zh'), None)
+    en = next((track for track in tracks if track['role'] == 'en'), None)
     with tempfile.TemporaryDirectory(prefix='galaxy-render-') as directory:
         temporary = str(output.with_name(output.stem + '.processing' + output.suffix))
         args = [ffmpeg, '-hide_banner', '-nostdin', '-y', '-i', source]
+        filters = []
+        encode_video = ['-c:v', 'libx264', '-crf', '20', '-preset', 'medium', '-pix_fmt', 'yuv420p']
+        fallback = None
         if mode == 'soft':
-            tracks = request.get('captionFiles') or [{'file': request['captionFile'], 'language': 'und'}]
-            for track in tracks[:5]:
+            if not tracks:
+                raise ValueError('No subtitles to embed')
+            # zh, en, the composed zh+en track, then up to two other languages.
+            embedded = [track for track in (zh, en) if track]
+            if zh and en:
+                combined = Path(directory) / 'zh-en.srt'
+                write_srt(combined, compose_bilingual(read_cues(zh['file'], False), read_cues(en['file'], False)))
+                embedded.append({'file': str(combined), 'language': 'zh', 'role': 'zh-en'})
+            embedded += [track for track in tracks if track['role'] == 'other'][:2]
+            for track in embedded:
                 args += ['-i', track['file']]
             args += ['-map', '0:v:0', '-map', '0:a?']
-            for index, track in enumerate(tracks[:5]):
-                args += ['-map', f'{index + 1}:0', f'-metadata:s:s:{index}', f"language={track['language']}"]
-            args += ['-c', 'copy', '-c:s', 'mov_text' if output.suffix.lower() == '.mp4' else 'srt']
+            default = next((index for index, track in enumerate(embedded) if track['role'] == 'zh-en'), 0)
+            for index, track in enumerate(embedded):
+                label = {'zh-en': '中文 + English', 'zh': '中文', 'en': 'English'}.get(track['role'], track['language'])
+                args += ['-map', f'{index + 1}:0', f'-metadata:s:s:{index}', f"language={language_code(track['language'])}",
+                         f'-metadata:s:s:{index}', f'handler_name={label}', f'-metadata:s:s:{index}', f'title={label}',
+                         f'-disposition:s:{index}', 'default' if index == default else '0']
+            position = len(args)
+            args += ['-c:v', 'copy', '-c:a', 'copy', '-c:s', 'mov_text' if mp4 else 'srt']
+            # MP4 cannot carry every source codec; encode only when lossless muxing fails.
+            fallback = (position, [*encode_video, '-c:a', 'aac', '-b:a', '192k'])
         else:
             args += ['-map', '0:v:0', '-map', '0:a?']
-            filters = []
-            if mode == 'burn':
-                shutil.copyfile(request['captionFile'], Path(directory) / 'captions.srt')
-                fonts = Path(getattr(__import__('sys'), '_MEIPASS', Path(__file__).parent)) / 'fonts'
-                if not fonts.exists():
-                    fonts = Path(ffmpeg).parent / 'fonts'
-                if fonts.exists():
-                    shutil.copytree(fonts, Path(directory) / 'fonts')
-                filters.append("subtitles=filename=captions.srt:fontsdir=fonts:force_style='FontName=Noto Sans CJK SC,FontSize=24,Bold=1,Outline=2,Shadow=1'")
+            if mode in ('burn', 'burn-bilingual'):
+                if mode == 'burn-bilingual' and not (zh and en):
+                    raise ValueError('Bilingual burn-in needs a Chinese and an English subtitle track')
+                if mode == 'burn-bilingual':
+                    chosen = {'zh': read_cues(zh['file'], False), 'en': read_cues(en['file'], False)}
+                else:
+                    chosen = {tracks[0]['role']: read_cues(tracks[0]['file'], False)} if tracks else {}
+                if not any(chosen.values()):
+                    raise ValueError('No subtitles to burn')
+                size = inspect(ffmpeg, source, details=True)
+                write_ass(Path(directory) / 'captions.ass', chosen, size['width'], size['height'])
+                (Path(directory) / 'fonts').mkdir()
+                shutil.copyfile(bundled_fonts(ffmpeg) / 'NotoSansCJKsc-Bold.otf', Path(directory) / 'fonts' / 'caption.otf')
+                # Fixed relative names keep drive colons and apostrophes out of FFmpeg's filter language.
+                filters.append('ass=filename=captions.ass:fontsdir=fonts')
             resolution = request.get('outputResolution', 'original')
             if resolution != 'original':
                 limit = int(resolution)
                 factor = f'min(1,{limit}/min(iw,ih))'
+                # Burn on the source canvas first, then scale the frame with its captions.
                 filters.append(f"scale=w='max(2,trunc(iw*{factor}/2)*2)':h='max(2,trunc(ih*{factor}/2)*2)'")
             if filters:
                 args += ['-vf', ','.join(filters)]
-            args += ['-c:v', 'libx264', '-crf', '20', '-preset', 'medium', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '192k']
-        if output.suffix.lower() == '.mp4':
+            args += [*encode_video, '-c:a', 'aac', '-b:a', '192k']
+        if mp4:
             args += ['-movflags', '+faststart']
-        args += ['-progress', 'pipe:1', '-nostats', temporary]
+        tail = ['-progress', 'pipe:1', '-nostats', temporary]
         try:
-            with tempfile.TemporaryFile() as errors:
-                process = subprocess.Popen(args, cwd=directory, stdout=subprocess.PIPE, stderr=errors, text=True, encoding='utf-8')
-                for line in process.stdout:
-                    if line.startswith('out_time_us=') and metadata['durationSeconds']:
-                        try:
-                            progress = min(.99, int(line.split('=')[1]) / 1_000_000 / metadata['durationSeconds'])
-                            emit('processing', status='exporting', progress=progress)
-                        except ValueError:
-                            pass
-                if process.wait() != 0:
-                    errors.seek(0)
-                    raise RuntimeError(errors.read().decode('utf-8', 'replace')[-4000:])
+            try:
+                run_ffmpeg(args + tail, directory, emit, metadata['durationSeconds'])
+            except RuntimeError:
+                if not fallback:
+                    raise
+                # Replace "-c:v copy -c:a copy" with an encode; keep the subtitle codec.
+                position, replacement = fallback
+                run_ffmpeg(args[:position] + replacement + args[position + 4:] + tail, directory, emit, metadata['durationSeconds'])
             os.replace(temporary, output)
         finally:
             Path(temporary).unlink(missing_ok=True)

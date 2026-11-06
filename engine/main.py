@@ -1,4 +1,5 @@
-"""Galaxy Clipper's local media engine. No network extractors or download operations."""
+"""Galaxy Clipper's local media engine. The only network operation is `captions`,
+which fetches platform subtitle files (never media) for a URL the user entered."""
 import json
 import sys
 import errno
@@ -17,6 +18,9 @@ def main():
     elif operation == 'clip-render':
         from clipping import run
         run(request, emit)
+    elif operation == 'captions':
+        from subtitles import fetch
+        fetch(request, emit)
     elif operation in ('unpack', 'inspect', 'audio', 'audio-chunk', 'embedded-captions', 'render'):
         from media_processing import run
         run(request, emit)

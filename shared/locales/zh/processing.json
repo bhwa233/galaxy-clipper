@@ -32,9 +32,9 @@
   "export": "导出",
   "format": "导出格式",
   "exportVideo": "转换为新视频",
-  "soft": "软字幕视频（MKV）",
-  "burn": "烧字幕视频（MP4）",
-  "video": "转码视频（MP4）",
+  "soft": "软字幕（{{format}}）：中文、英文与中英双语轨",
+  "burn": "烧录当前字幕（{{format}}）",
+  "video": "转码视频（{{format}}）",
   "remove": "移除记录",
   "download": "下载模型",
   "installed": "已安装",
@@ -83,7 +83,8 @@
     "committing": "正在保存",
     "no-speech": "未检测到语音",
     "exporting": "正在导出",
-    "remote-transcribing": "远端转写"
+    "remote-transcribing": "远端转写",
+    "platform-captions": "正在获取平台字幕"
   },
   "kernel": "yt-dlp 内核",
   "kernelAuto": "后台自动更新 yt-dlp",
@@ -109,5 +110,12 @@
   "noAvailableMedia": "暂无可用媒体，请先下载或导入",
   "chooseHint": "已完成下载且文件仍在的视频和音频可直接选择；选中后载入字幕处理，也可导入本地文件。",
   "mediaUnavailable": "下载的媒体文件已不存在或不可读取，请重新下载或导入本地文件。",
-  "remote": "远端识别"
+  "remote": "远端识别",
+  "burn-bilingual": "烧录中英双语字幕（{{format}}）",
+  "platformTitle": "平台字幕",
+  "platformUrl": "原视频页面链接",
+  "platformAutomatic": "没有人工字幕时使用自动字幕",
+  "platformHint": "只获取字幕文件（不下载媒体），语言按设置中的字幕语言：{{languages}}。每种语言优先人工字幕。",
+  "platformFetch": "获取平台字幕",
+  "eta": "约剩 {{time}}"
 }

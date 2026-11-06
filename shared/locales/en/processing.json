@@ -32,9 +32,9 @@
   "export": "Export",
   "format": "Export format",
   "exportVideo": "Convert to a new video",
-  "soft": "Soft subtitles (MKV)",
-  "burn": "Burned subtitles (MP4)",
-  "video": "Transcode video (MP4)",
+  "soft": "Soft subtitles ({{format}}): zh, en and zh+en tracks",
+  "burn": "Burn active subtitles ({{format}})",
+  "video": "Transcode video ({{format}})",
   "remove": "Remove record",
   "download": "Download model",
   "installed": "Installed",
@@ -83,7 +83,8 @@
     "committing": "Saving",
     "no-speech": "No speech detected",
     "exporting": "Exporting",
-    "remote-transcribing": "Recognizing remotely"
+    "remote-transcribing": "Recognizing remotely",
+    "platform-captions": "Fetching platform subtitles"
   },
   "kernel": "yt-dlp kernel",
   "kernelAuto": "Update yt-dlp in the background",
@@ -109,5 +110,12 @@
   "noAvailableMedia": "No media available; download or import a file",
   "chooseHint": "Select a completed video or audio download to load it for subtitle processing, or import a local file. Missing files are excluded.",
   "mediaUnavailable": "The downloaded media is missing or unreadable. Download it again or import a local file.",
-  "remote": "Remote recognition"
+  "remote": "Remote recognition",
+  "burn-bilingual": "Burn zh + en bilingual subtitles ({{format}})",
+  "platformTitle": "Platform subtitles",
+  "platformUrl": "Source page URL",
+  "platformAutomatic": "Use automatic captions when no human captions exist",
+  "platformHint": "Fetches subtitle files only (no media) for your caption languages: {{languages}}. Human captions are preferred per language.",
+  "platformFetch": "Fetch platform subtitles",
+  "eta": "About {{time}} left"
 }

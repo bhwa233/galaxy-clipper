@@ -71,8 +71,9 @@ body { background: var(--background); color: var(--foreground); }
   min-height: 0;
   background: color-mix(in oklab, var(--card) 50%, var(--background));
 }
-.editor-library { border-right: 1px solid var(--border); }
-.editor-inspector { border-left: 1px solid var(--border); }
+/* Column flex lets each pane's body scroll inside its grid cell instead of overflowing it. */
+.editor-library { display: flex; flex-direction: column; border-right: 1px solid var(--border); }
+.editor-inspector { display: flex; flex-direction: column; border-left: 1px solid var(--border); }
 .editor-preview {
   display: flex;
   flex-direction: column;

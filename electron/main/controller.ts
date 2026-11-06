@@ -153,9 +153,10 @@ export class Controller {
           const selected = await dialog.showOpenDialog(this.window()!, { properties: ['openFile'], filters: [{ name: 'Subtitles', extensions: ['srt', 'vtt', 'ass'] }] })
           if (!selected.canceled && selected.filePaths[0]) document = this.processing.importCaptions(id, selected.filePaths[0]); break
         }
+        case 'processing:platform': { const value = commandSchemas[command].parse(input); document = await this.processing.platform(value.id, value.url, value.automatic); break }
         case 'processing:export': {
           const { id, format } = commandSchemas[command].parse(input), doc = this.processing.get(id)
-          const ext = format === 'soft' || format === 'video' && this.settings.outputFormat === 'mkv' ? 'mkv' : ['burn', 'video'].includes(format) ? 'mp4' : format
+          const ext = ['soft', 'burn', 'burn-bilingual', 'video'].includes(format) ? this.settings.outputFormat : format
           const selected = await dialog.showSaveDialog(this.window()!, { defaultPath: path.join(this.settings.outputDirectory, doc.title.replace(/[<>:"/\\|?*]/g, '_') + '.processed.' + ext), filters: [{ name: ext.toUpperCase(), extensions: [ext] }] })
           if (!selected.canceled && selected.filePath) document = await this.processing.export(id, format, selected.filePath); break
         }

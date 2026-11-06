@@ -9,6 +9,7 @@ import { parseCaptionTrack, type CaptionTrack as RawTrack } from './vendor/capti
 import type { PipelineResult } from './vendor/types'
 import { legacyDocumentSchema } from '../../../shared/project-import'
 
+type ExportFormat = 'txt' | 'md' | 'srt' | 'vtt' | 'soft' | 'burn' | 'burn-bilingual' | 'video'
 type StoredDocument = ProcessingDocument & { sourcePath: string; sourceSignature: string; trackData: Record<string, Caption[]>; trackSpeakers: Record<string, ProcessingDocument['speakers']>; exportPaths: string[]; pending?: { action: 'transcribe' | 'recognize' | 'speakers'; speakers: Settings['transcriptionSpeakers']; remote?: import('../../../shared/clipping').ProviderSnapshot; resuming?: boolean } }
 const extensions = new Set(['.mp4', '.mkv', '.webm', '.mov', '.avi', '.m4v', '.mp3', '.m4a', '.wav', '.flac', '.ogg', '.opus', '.aac', '.ts'])
 const busy = (doc: ProcessingDocument) => doc.status === 'running' || doc.status === 'queued'
@@ -42,8 +43,8 @@ export class ProcessingService {
   state(): ProcessingState {
     return { documents: [...this.documents.values()].map(doc => this.summary(doc)).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)), models: this.models.statuses(this.settings().captionLanguages[0] || this.settings().locale), runtime: 'sherpa-onnx · CPU · offline' }
   }
-  private summary(doc: StoredDocument): ProcessingSummary { return { id: doc.id, title: doc.title, sourceName: doc.sourceName, jobId: doc.jobId, durationSeconds: doc.durationSeconds, status: doc.status, stage: doc.stage, progress: doc.progress, error: doc.error, updatedAt: doc.updatedAt, captionCount: doc.captions.length, language: doc.language, model: doc.model, retryable: Boolean(doc.pending && (doc.status === 'failed' || doc.status === 'cancelled')) } }
-  get(id: string): ProcessingDocument { const doc = this.require(id); return { ...this.summary(doc), revision: doc.revision, captions: doc.captions, speakers: doc.speakers, tracks: doc.tracks, activeTrack: doc.activeTrack, exports: doc.exports } }
+  private summary(doc: StoredDocument): ProcessingSummary { return { id: doc.id, title: doc.title, sourceName: doc.sourceName, jobId: doc.jobId, durationSeconds: doc.durationSeconds, status: doc.status, stage: doc.stage, progress: doc.progress, eta: doc.eta, error: doc.error, updatedAt: doc.updatedAt, captionCount: doc.captions.length, language: doc.language, model: doc.model, retryable: Boolean(doc.pending && (doc.status === 'failed' || doc.status === 'cancelled')) } }
+  get(id: string): ProcessingDocument { const doc = this.require(id); return { ...this.summary(doc), revision: doc.revision, captions: doc.captions, speakers: doc.speakers, tracks: doc.tracks, activeTrack: doc.activeTrack, sourceUrl: doc.sourceUrl, exports: doc.exports } }
   private require(id: string): StoredDocument { const doc = this.documents.get(id); if (!doc) throw new Error('Media document not found'); return doc }
   media(id: string): string { const doc = this.require(id); if (!existsSync(doc.sourcePath) || signature(doc.sourcePath) !== doc.sourceSignature) throw new Error('Source media is missing or changed'); return doc.sourcePath }
   private folder(id: string): string { const directory = path.join(this.directory, id); mkdirSync(directory, { recursive: true }); return directory }
@@ -59,8 +60,8 @@ export class ProcessingService {
     const sourceSignature = signature(sourcePath)
     const existing = [...this.documents.values()].find(doc => doc.sourcePath === sourcePath && doc.sourceSignature === sourceSignature)
     if (existing) return this.get(existing.id)
-    const metadata = await this.engine.request<{ durationSeconds: number }>({ operation: 'inspect', input: sourcePath })
-    const doc: StoredDocument = { id: randomUUID(), title: path.basename(sourcePath, path.extname(sourcePath)), sourceName: path.basename(sourcePath), sourcePath, sourceSignature, durationSeconds: metadata.durationSeconds, status: 'idle', updatedAt: new Date().toISOString(), captionCount: 0, revision: 0, captions: [], speakers: [], tracks: [], trackData: {}, trackSpeakers: {}, exportPaths: [], exports: [] }
+    const metadata = await this.engine.request<{ durationSeconds: number; sourceUrl?: string }>({ operation: 'inspect', input: sourcePath })
+    const doc: StoredDocument = { sourceUrl: metadata.sourceUrl, id: randomUUID(), title: path.basename(sourcePath, path.extname(sourcePath)), sourceName: path.basename(sourcePath), sourcePath, sourceSignature, durationSeconds: metadata.durationSeconds, status: 'idle', updatedAt: new Date().toISOString(), captionCount: 0, revision: 0, captions: [], speakers: [], tracks: [], trackData: {}, trackSpeakers: {}, exportPaths: [], exports: [] }
     this.documents.set(doc.id, doc)
     try { await this.localCaptions(doc) } catch (error) { this.documents.delete(doc.id); rmSync(this.folder(doc.id), { recursive: true, force: true }); throw error }
     this.save(doc); return this.get(doc.id)
@@ -115,6 +116,25 @@ export class ProcessingService {
     this.addTrack(doc, readFileSync(file, 'utf8'), format as RawTrack['format'], language, 'file', path.basename(file), false)
     if (!doc.activeTrack) { doc.activeTrack = old; throw new Error('No usable captions found') }
     doc.revision++; this.save(doc); return this.get(id)
+  }
+  platform(id: string, url: string, automatic: boolean): Promise<ProcessingDocument> { return this.track(this.fetchPlatform(id, url, automatic)) }
+  /** Platform captions for the source's page: manual first per chosen language, automatic only when allowed. */
+  private async fetchPlatform(id: string, url: string, automatic: boolean): Promise<ProcessingDocument> {
+    const doc = this.require(id); this.editable(doc)
+    const controller = new AbortController(), directory = path.join(this.folder(id), `platform-${randomUUID()}`)
+    this.active.set(id, controller); doc.status = 'running'; doc.stage = 'platform-captions'; doc.progress = undefined; doc.error = undefined; this.changed()
+    try {
+      const result = await this.engine.request<{ tracks: { file: string; language: string; automatic: boolean }[] }>({ operation: 'captions', url, output: directory, captionLanguages: this.settings().captionLanguages, subtitleAutoGenerated: automatic, subtitleNormalizeOverlaps: true }, controller.signal)
+      if (!result.tracks.length) throw new Error('No platform subtitles were found for the chosen languages')
+      if (doc.activeTrack) { doc.trackData[doc.activeTrack] = doc.captions; doc.trackSpeakers[doc.activeTrack] = doc.speakers }
+      const known = new Set(doc.tracks.map(track => track.id))
+      for (const track of result.tracks) this.addTrack(doc, readFileSync(track.file, 'utf8'), 'srt', track.language, 'platform', `Platform · ${track.language}${track.automatic ? ' (auto)' : ''}`)
+      const added = doc.tracks.find(track => !known.has(track.id))
+      if (added) { doc.activeTrack = added.id; doc.captions = doc.trackData[added.id]; doc.speakers = doc.trackSpeakers[added.id] || []; doc.language = added.language; doc.captionCount = doc.captions.length }
+      doc.sourceUrl = url; doc.revision++; doc.status = 'completed'; doc.stage = undefined; doc.progress = 1
+    } catch (error) { doc.status = controller.signal.aborted ? 'cancelled' : 'failed'; doc.error = controller.signal.aborted ? undefined : redact(error instanceof Error ? error.message : String(error)); throw error }
+    finally { this.active.delete(id); rmSync(directory, { recursive: true, force: true }); this.save(doc); this.pump() }
+    return this.get(id)
   }
   switchTrack(id: string, trackId: string): ProcessingDocument {
     const doc = this.require(id); this.editable(doc)
@@ -219,35 +239,47 @@ export class ProcessingService {
     doc.captionCount = doc.captions.length; doc.revision++; doc.status = 'completed'; doc.progress = 1; doc.stage = result.resultKind === 'no-speech' ? 'no-speech' : undefined; doc.pending = undefined; this.save(doc)
     rmSync(wav, { force: true })
   }
-  export(id: string, format: 'txt' | 'md' | 'srt' | 'vtt' | 'soft' | 'burn' | 'video', output: string): Promise<ProcessingDocument> {
-    const work = this.exportDocument(id, format, output)
+  export(id: string, format: ExportFormat, output: string): Promise<ProcessingDocument> {
+    return this.track(this.exportDocument(id, format, output))
+  }
+  /** Shutdown waits for exports and platform fetches that own files in the document folder. */
+  private track<T>(work: Promise<T>): Promise<T> {
     this.draining.add(work)
     const settled = () => { this.draining.delete(work) }
     void work.then(settled, settled)
     return work
   }
-  private async exportDocument(id: string, format: 'txt' | 'md' | 'srt' | 'vtt' | 'soft' | 'burn' | 'video', output: string): Promise<ProcessingDocument> {
+  /** zh and en tracks (active first) pair into bilingual output; other languages travel as-is. */
+  private exportTracks(doc: StoredDocument, format: 'soft' | 'burn' | 'burn-bilingual'): { language: string; role: 'zh' | 'en' | 'other'; captions: Caption[] }[] {
+    const role = (language: string) => /^zh(?:-|$)/i.test(language) ? 'zh' as const : /^en(?:-|$)/i.test(language) ? 'en' as const : 'other' as const
+    if (format === 'burn') { const language = doc.tracks.find(track => track.id === doc.activeTrack)?.language || doc.language || 'und'; return [{ language, role: role(language), captions: doc.captions }] }
+    const ordered = [...doc.tracks.filter(track => track.id === doc.activeTrack), ...doc.tracks.filter(track => track.id !== doc.activeTrack)]
+    const chosen: ReturnType<ProcessingService['exportTracks']> = [], languages = new Set<string>()
+    for (const track of ordered) {
+      const captions = track.id === doc.activeTrack ? doc.captions : doc.trackData[track.id], kind = role(track.language)
+      if (!captions?.length || (kind === 'other' ? languages.has(track.language.toLowerCase()) : chosen.some(item => item.role === kind))) continue
+      if (kind === 'other' && (format !== 'soft' || chosen.filter(item => item.role === 'other').length >= 2)) continue
+      chosen.push({ language: track.language, role: kind, captions }); languages.add(track.language.toLowerCase())
+    }
+    if (format === 'burn-bilingual' && !(chosen.some(item => item.role === 'zh') && chosen.some(item => item.role === 'en'))) throw new Error('Bilingual burn-in needs a Chinese and an English subtitle track')
+    return chosen
+  }
+  private async exportDocument(id: string, format: ExportFormat, output: string): Promise<ProcessingDocument> {
     const doc = this.require(id); this.editable(doc)
-    if (['soft', 'burn', 'srt', 'vtt'].includes(format) && !doc.captions.length) throw new Error('No subtitles to export')
+    if (format !== 'txt' && format !== 'md' && format !== 'video' && !doc.captions.length) throw new Error('No subtitles to export')
     if (path.resolve(output) === path.resolve(doc.sourcePath) || existsSync(output)) throw new Error('Choose a new output file; originals are never overwritten')
-    if (['txt', 'md', 'srt', 'vtt'].includes(format)) {
-      writeFileSync(output, exportCaptions(this.get(id), format as 'txt' | 'md' | 'srt' | 'vtt'), { flag: 'wx', mode: 0o600 })
+    if (format === 'txt' || format === 'md' || format === 'srt' || format === 'vtt') {
+      writeFileSync(output, exportCaptions(this.get(id), format), { flag: 'wx', mode: 0o600 })
     } else {
-      const controller = new AbortController(); this.active.set(id, controller); doc.status = 'running'; doc.stage = 'exporting'; doc.progress = 0; this.changed()
-      const captionFile = path.join(this.folder(id), 'export.srt'); writeFileSync(captionFile, exportCaptions(this.get(id), 'srt'), { mode: 0o600 })
-      const languages = new Set<string>(), captionFiles: { file: string; language: string }[] = []
-      if (format === 'soft') for (const track of [...doc.tracks.filter(track => track.id === doc.activeTrack), ...doc.tracks.filter(track => track.id !== doc.activeTrack)]) {
-        if (languages.has(track.language) || captionFiles.length >= 5) continue
-        const captions = track.id === doc.activeTrack ? doc.captions : doc.trackData[track.id]
-        if (!captions?.length) continue
-        const file = path.join(this.folder(id), `export-${captionFiles.length}.srt`)
-        writeFileSync(file, exportCaptions({ ...this.get(id), captions }, 'srt'), { mode: 0o600 }); captionFiles.push({ file, language: track.language }); languages.add(track.language)
-      }
+      const chosen = format === 'video' ? [] : this.exportTracks(doc, format)
+      const captionTracks = chosen.map((track, index) => ({ file: path.join(this.folder(id), `export-${index}.srt`), language: track.language, role: track.role }))
+      const controller = new AbortController(); this.active.set(id, controller); doc.status = 'running'; doc.stage = 'exporting'; doc.progress = 0; doc.eta = undefined; doc.error = undefined; this.changed()
       try {
-        await this.engine.request({ operation: 'render', input: doc.sourcePath, output, renderMode: format as 'soft' | 'burn' | 'video', captionFile, captionFiles, outputResolution: this.settings().outputResolution }, controller.signal, event => { if (event.kind === 'processing') { doc.progress = typeof event.progress === 'number' ? event.progress : undefined; this.changed() } })
+        chosen.forEach((track, index) => writeFileSync(captionTracks[index].file, exportCaptions({ ...this.get(id), captions: track.captions }, 'srt'), { mode: 0o600 }))
+        await this.engine.request({ operation: 'render', input: doc.sourcePath, output, renderMode: format, captionTracks, outputResolution: this.settings().outputResolution }, controller.signal, event => { if (event.kind === 'processing') { doc.progress = typeof event.progress === 'number' ? event.progress : undefined; doc.eta = typeof event.eta === 'number' ? event.eta : undefined; this.changed() } })
         doc.status = 'completed'; doc.stage = undefined; doc.progress = 1
-      } catch (error) { doc.status = controller.signal.aborted ? 'cancelled' : 'failed'; doc.error = String(error instanceof Error ? error.message : error); throw error }
-      finally { this.active.delete(id); rmSync(captionFile, { force: true }); for (const track of captionFiles) rmSync(track.file, { force: true }); this.save(doc); this.pump() }
+      } catch (error) { doc.status = controller.signal.aborted ? 'cancelled' : 'failed'; doc.error = controller.signal.aborted ? undefined : redact(error instanceof Error ? error.message : String(error)); throw error }
+      finally { this.active.delete(id); doc.eta = undefined; for (const track of captionTracks) rmSync(track.file, { force: true }); this.save(doc); this.pump() }
     }
     doc.exportPaths.push(output); doc.exports.push({ name: path.basename(output), createdAt: new Date().toISOString() }); this.save(doc); return this.get(id)
   }
