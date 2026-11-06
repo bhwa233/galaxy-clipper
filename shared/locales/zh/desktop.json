@@ -2,7 +2,9 @@
   "notificationCompleted": "下载完成",
   "notifications": {
     "unavailable": "无法连接系统通知服务，请检查系统通知设置后重试。",
-    "failed": "系统未能显示通知，请检查通知权限。", "timeout": "系统未确认通知显示，请检查通知权限后重试。", "closed": "通知已关闭。"
+    "failed": "系统未能显示通知，请检查通知权限。",
+    "timeout": "系统未确认通知显示，请检查通知权限后重试。",
+    "closed": "通知已关闭。"
   },
   "coverFilename": "封面",
   "tray": {
@@ -22,7 +24,7 @@
     "noCompletedFile": "找不到已完成的文件",
     "openFailed": "无法打开文件：{{reason}}",
     "cliMissing": "找不到命令行程序：{{path}}",
-    "cliForeign": "{{path}} 已存在，而且不是 Galaxy Downloader 写入的。"
+    "cliForeign": "{{path}} 已存在，而且不是 Galaxy Clipper 写入的。"
   },
   "update": {
     "client": "客户端",

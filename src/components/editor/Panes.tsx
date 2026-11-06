@@ -1,12 +1,15 @@
 import type { ReactNode, RefObject } from 'react'
-import { Film } from 'lucide-react'
+import { Film, X } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Progress } from '@/components/ui/progress'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from '@/components/ui/empty'
 import { Badge } from '@/components/ui/badge'
 import { useTranslation } from 'react-i18next'
 import type { ProcessingDocument } from '../../../shared/processing'
 import { cn, formatDuration } from '@/lib/utils'
 
-export type Tool = 'media' | 'subtitles' | 'analysis' | 'drafts' | 'cover'
+export type Tool = 'media' | 'subtitles' | 'analysis' | 'drafts' | 'cover' | 'export'
 export function Panel({ title, detail, actions, children, side }: { title: string; detail?: string; actions?: ReactNode; children: ReactNode; side: 'library' | 'inspector' }) {
   return <section className={'editor-' + side} aria-label={title}><header className="flex shrink-0 items-center gap-2 border-b p-4"><div className="min-w-0 flex-1"><h2 className="text-sm font-semibold">{title}</h2>{detail && <p className="mt-1 text-xs text-muted-foreground">{detail}</p>}</div>{actions}</header><div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overscroll-contain p-4">{children}</div></section>
 }
@@ -21,4 +24,17 @@ export function VideoPreview({ document, source, player, onTimeUpdate, onLoadedM
   if(!document) return <Blank title={t('emptyTitle')} detail={t('emptyHint')} />
   return <video key={source || document.id} ref={player} src={source || 'galaxy-media://processing/' + document.id} controls preload="metadata" onTimeUpdate={onTimeUpdate} onLoadedMetadata={onLoadedMetadata} className={cn('max-h-full w-full rounded-lg bg-black object-contain', /\.(mp3|wav|m4a|flac|ogg|opus|aac)$/i.test(document.sourceName) && 'h-24')} aria-label={t(source ? 'draftPreview' : 'sourcePreview')} />
 }
-export const rangeLabel = (start: number, end: number) => `${formatDuration(start / 1000)} – ${formatDuration(end / 1000)}`
+/** Pinned to the top of the inspector so progress, time left and cancel never scroll away. */
+export function TaskCard({ status, detail, progress, eta, error, onCancel, children }: { status?: string; detail?: string; progress?: number; eta?: number; error?: string; onCancel?: () => void; children?: ReactNode }) {
+  const { t } = useTranslation('editor')
+  if (!status && !error) return null
+  return <div className="sticky -top-4 z-10 -mx-4 -mt-4 flex flex-col gap-2 border-b bg-card/95 p-4 backdrop-blur" role="status">
+    {status && <div className="flex items-center gap-2"><Badge variant="secondary">{status}</Badge>{detail && <span className="truncate text-xs text-muted-foreground">{detail}</span>}</div>}
+    {progress !== undefined && <Progress value={progress * 100} />}
+    {eta !== undefined && <span className="text-xs text-muted-foreground">{t('export.eta', { time: formatDuration(eta) })}</span>}
+    {onCancel && <Button size="sm" variant="outline" onClick={onCancel}><X data-icon="inline-start" />{t('cancel')}</Button>}
+    {error && <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert>}
+    {children}
+  </div>
+}
+export const rangeLabel =(start: number, end: number) => `${formatDuration(start / 1000)} – ${formatDuration(end / 1000)}`

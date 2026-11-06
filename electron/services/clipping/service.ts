@@ -28,7 +28,7 @@ export class ClippingService {
   private frameTail: Promise<unknown> = Promise.resolve()
   private version = 0
   private stopped = false
-  constructor(private directory: string, private processing: ProcessingService, private engine: Engine, readonly cloud: CloudServices, private changed: () => void, private defaults: () => Omit<Draft['settings'], 'title'> = () => draftSettingsSchema.parse({})) {}
+  constructor(private directory: string, private processing: ProcessingService, private engine: Engine, readonly cloud: CloudServices, private changed: () => void, private defaults: () => Omit<Draft['settings'], 'title'> = () => draftSettingsSchema.parse({}), private styles?: import('../styles').StyleLibrary) {}
   state(): ClippingState { return { version: this.version, settings: this.cloud.state() } }
   private signature(id: string): string {
     try { const file = this.processing.media(id), info = statSync(file); return fingerprint([file, info.size, info.mtimeMs]) } catch { throw clipError('sourceChanged') }
@@ -167,10 +167,26 @@ export class ClippingService {
     if (candidates.some(value => !value) || new Set(candidates.map(value => value!.transcriptId)).size !== 1) throw clipError('candidate')
     const groups = separate ? candidates.map(value => [value!]) : [candidates.map(value => value!)]
     for (const group of groups) {
-      const draft: Draft = { id: randomUUID(), title: group[0].title, revision: 0, transcriptId: group[0].transcriptId, scenes: group.map(value => ({ id: randomUUID(), candidateId: value.id, startMs: value.startMs, endMs: value.endMs })), settings: draftSettingsSchema.parse(this.defaults()), updatedAt: new Date().toISOString() }
+      const draft: Draft = { id: randomUUID(), title: group[0].title, revision: 0, transcriptId: group[0].transcriptId, scenes: group.map(value => ({ id: randomUUID(), candidateId: value.id, startMs: value.startMs, endMs: value.endMs })), settings: draftSettingsSchema.parse({ ...this.defaults(), subtitleStyle: this.processing.get(id).subtitleStyle || this.defaults().subtitleStyle }), updatedAt: new Date().toISOString() }
       this.validate(project, draft); project.drafts.unshift(draft)
     }
     this.save(project); return this.get(id)
+  }
+  private drafts(): { project: StoredProject; draft: Draft }[] {
+    return this.processing.state().documents.flatMap(document => { try { const project = this.require(document.id); return project.drafts.map(draft => ({ project, draft })) } catch { return [] } })
+  }
+  /** Drafts that reference a library style, across every project. */
+  styleUsage(kind: 'subtitle' | 'cover', id: string): number { return this.drafts().filter(({ draft }) => (kind === 'subtitle' ? draft.settings.subtitleStyle : draft.settings.cover?.style) === id).length }
+  /** After a style is deleted, its drafts fall back to the built-in it was copied from. */
+  replaceStyle(kind: 'subtitle' | 'cover', id: string, base: string): void {
+    const touched = new Set<StoredProject>()
+    for (const { project, draft } of this.drafts()) {
+      if (kind === 'subtitle' && draft.settings.subtitleStyle === id) draft.settings.subtitleStyle = base
+      else if (kind === 'cover' && draft.settings.cover?.style === id) draft.settings.cover.style = base
+      else continue
+      draft.revision++; draft.updatedAt = new Date().toISOString(); touched.add(project)
+    }
+    for (const project of touched) this.save(project)
   }
   private validate(project: StoredProject, draft: Draft): void {
     const durationMs = this.processing.get(project.documentId).durationSeconds * 1000
@@ -250,11 +266,12 @@ export class ClippingService {
     const same = project.renders.find(job => job.draftId === draftId && job.revision === revision && job.preview === preview && (job.status === 'queued' || job.status === 'running'))
     if (same) return this.get(id)
     if (preview) {
-      const cached = project.renders.find(job => job.draftId === draftId && job.revision === revision && job.preview && job.status === 'completed' && job.rendererVersion === RENDERER_VERSION && job.media)
+      const cached = project.renders.find(job => job.draftId === draftId && job.revision === revision && job.preview && job.status === 'completed' && job.rendererVersion === RENDERER_VERSION && job.media && JSON.stringify(job.subtitleStyle) === JSON.stringify(this.styles?.subtitleParams(draft.settings.subtitleStyle)))
       const file = cached && project.paths[cached.id]
       try { if (file && statSync(file).isFile() && statSync(file).size > 0) return this.get(id) } catch { /* Missing previews are rendered again. */ }
     }
-    const job: RenderJob = { id: randomUUID(), draftId, revision, snapshot: structuredClone(draft), preview, status: 'queued', createdAt: new Date().toISOString(), rendererVersion: RENDERER_VERSION }
+    // The resolved style travels with the job, so editing or deleting it later never changes this record.
+    const job: RenderJob = { id: randomUUID(), draftId, revision, snapshot: structuredClone(draft), preview, status: 'queued', createdAt: new Date().toISOString(), rendererVersion: RENDERER_VERSION, subtitleStyle: this.styles?.subtitleParams(draft.settings.subtitleStyle) }
     const target = preview ? path.join(path.dirname(this.file(id)), 'previews', job.id + '.mp4') : output
     if (!target || path.resolve(target) === path.resolve(input) || existsSync(target) || this.reserved.has(path.resolve(target))) throw clipError('output')
     this.reserved.set(path.resolve(target), job.id); project.renders.unshift(job); project.paths[job.id] = target
@@ -271,7 +288,7 @@ export class ClippingService {
         mkdirSync(path.dirname(target), { recursive: true })
         mkdirSync(taskDirectory, { recursive: true })
         const mapped = this.mappedCaptions(project, job.snapshot)
-        const result = await this.engine.request<{ durationMs: number; media?: RenderedMedia }>({ operation: 'clip-render', input, output: target, scenes: job.snapshot.scenes, clipSettings: job.snapshot.settings, clipCaptions: mapped.captions, preview, clipTaskId: job.id, workDirectory: taskDirectory }, controller.signal, event => {
+        const result = await this.engine.request<{ durationMs: number; media?: RenderedMedia }>({ operation: 'clip-render', input, output: target, scenes: job.snapshot.scenes, clipSettings: job.snapshot.settings, clipCaptions: mapped.captions, clipSubtitleStyle: job.subtitleStyle, preview, clipTaskId: job.id, workDirectory: taskDirectory }, controller.signal, event => {
           if (event.kind === 'processing') { job.progress = event.progress; this.version++; this.changed() }
         })
         controller.signal.throwIfAborted(); this.source(project)
@@ -363,10 +380,11 @@ export class ClippingService {
         frames += Math.max(1, Math.round((scene.endMs - scene.startMs) * 30 / 1000))
       }
     }
-    const key = fingerprint([draft.id, draft.revision, settings, frameMs, render?.id || project.sourceSignature, 'cover-v5'])
+    const coverStyle = this.styles?.coverParams(settings.style)
+    const key = fingerprint([draft.id, draft.revision, settings, coverStyle, frameMs, render?.id || project.sourceSignature, 'cover-v6'])
     const held = project.covers?.find(job => job.cacheKey === key && ['queued', 'running', 'completed'].includes(job.status))
     if (held && (held.status !== 'completed' || existsSync(project.paths[held.id] || ''))) return this.get(project.documentId)
-    const job: CoverJob = { id: randomUUID(), draftId: draft.id, revision: draft.revision, snapshot: structuredClone(draft), renderId: render?.id, cacheKey: key, status: 'queued', createdAt: new Date().toISOString(), frameMs }
+    const job: CoverJob = { id: randomUUID(), draftId: draft.id, revision: draft.revision, snapshot: structuredClone(draft), renderId: render?.id, cacheKey: key, status: 'queued', createdAt: new Date().toISOString(), frameMs, coverStyle }
     const folder = path.dirname(this.file(project.documentId)), directory = path.join(folder, 'tasks', job.id)
     const target = path.join(folder, 'covers', job.id + '.jpg'), controller = new AbortController()
     ;(project.covers ||= []).unshift(job); project.paths[job.id] = target
@@ -378,7 +396,7 @@ export class ClippingService {
         job.status = 'running'; this.save(project)
         mkdirSync(directory, { recursive: true }); mkdirSync(path.dirname(target), { recursive: true })
         const videoSize = render?.media || (draft.settings.aspect === 'portrait' ? { width: 720, height: 1280 } : draft.settings.aspect === 'landscape' ? { width: 1280, height: 720 } : undefined)
-        const image = await renderCover(this.engine.ffmpeg, input, seekMs, job.snapshot, directory, videoSize, controller.signal)
+        const image = await renderCover(this.engine.ffmpeg, input, seekMs, job.snapshot, job.coverStyle, directory, videoSize, controller.signal)
         controller.signal.throwIfAborted()
         if (!render) this.source(project)
         const staged = path.join(directory, 'result.jpg')

@@ -25,9 +25,9 @@ else {
         const url = new URL(request.url), source = url.hostname === 'processing' && /^\/[0-9a-f-]{36}$/.test(url.pathname)
         const clip = url.hostname === 'clipping' && url.pathname.match(/^\/([0-9a-f-]{36})\/([0-9a-f-]{36})$/)
         const cover = url.hostname === 'cover' && url.pathname.match(/^\/([0-9a-f-]{36})\/([0-9a-f-]{36})$/)
-        const font = url.hostname === 'cover-font' && url.pathname === '/bold'
+        const font = url.hostname === 'cover-font' && (url.pathname === '/bold' || url.pathname === '/regular')
         if(!source && !clip && !cover && !font) return new Response(null,{status:404})
-        const file = font ? controller.clippingCoverFont() : cover ? controller.clippingCover(cover[1],cover[2]) : clip ? controller.clippingMedia(clip[1],clip[2]) : controller.processingMedia(url.pathname.slice(1))
+        const file = font ? controller.clippingCoverFont(url.pathname === '/bold' ? 'bold' : 'regular') : cover ? controller.clippingCover(cover[1],cover[2]) : clip ? controller.clippingMedia(clip[1],clip[2]) : controller.processingMedia(url.pathname.slice(1))
         const info = await stat(file), types:Record<string,string> = {'.jpg':'image/jpeg','.otf':'font/otf','.mp4':'video/mp4','.mkv':'video/x-matroska','.webm':'video/webm','.mov':'video/quicktime','.m4v':'video/mp4','.mp3':'audio/mpeg','.m4a':'audio/mp4','.wav':'audio/wav','.ogg':'audio/ogg','.flac':'audio/flac'}
         const headers = new Headers({'Content-Type':types[path.extname(file).toLowerCase()] || 'application/octet-stream','Accept-Ranges':'bytes','Cache-Control':'no-store'})
         if(font) {headers.set('Access-Control-Allow-Origin','*');headers.set('Cache-Control','public, max-age=86400')}
@@ -53,7 +53,8 @@ else {
     window.setMenuBarVisibility(false)
     window.webContents.setWindowOpenHandler(() => ({action:'deny'}))
     window.webContents.on('will-navigate',event => event.preventDefault())
-    window.once('ready-to-show',() => window?.show())
+    // The command line starts the client with --background when it is not running.
+    window.once('ready-to-show',() => {if(!process.argv.includes('--background')) window?.show()})
     window.on('closed',() => {window=null})
     await window.loadURL(rendererUrl)
     await controller.initialize()

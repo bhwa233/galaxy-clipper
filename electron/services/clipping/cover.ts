@@ -5,6 +5,7 @@ import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { promisify } from 'node:util'
 import { coverSettingsSchema, type Draft } from '../../../shared/clipping'
+import { coverDefaults, type CoverStyleParams } from '../../../shared/styles'
 import { clipError } from './cloud'
 import { coverArtworkHTML, coverDimensions, layoutCoverArtwork } from '../../../shared/cover-artwork'
 
@@ -18,8 +19,9 @@ export async function readCoverFrame(ffmpeg: string, input: string, frameMs: num
   if (!stdout.length || !dimensions.width || !dimensions.height) throw clipError('coverFrame')
   return { data: stdout, ...dimensions }
 }
-export async function renderCover(ffmpeg: string, input: string, frameMs: number, draft: Draft, directory: string, videoSize: { width: number; height: number } | undefined, signal: AbortSignal) {
+export async function renderCover(ffmpeg: string, input: string, frameMs: number, draft: Draft, coverStyle: CoverStyleParams | undefined, directory: string, videoSize: { width: number; height: number } | undefined, signal: AbortSignal) {
   const settings = coverSettingsSchema.parse(draft.settings.cover || {})
+  const look = coverStyle || coverDefaults.knowledge
   const requestSignal = AbortSignal.any([signal, AbortSignal.timeout(45000)])
   requestSignal.throwIfAborted()
   const frame = path.join(directory, 'frame.jpg')
@@ -30,7 +32,7 @@ export async function renderCover(ffmpeg: string, input: string, frameMs: number
   const font = path.join(path.dirname(ffmpeg), 'fonts', 'NotoSansCJKsc-Bold.otf')
   await readFile(font)
   const portrait = height > width
-  const html = `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src file:; font-src file:; style-src 'unsafe-inline'"><style>html,body{margin:0;width:100%;height:100%;overflow:hidden}</style></head><body>${coverArtworkHTML('export', settings, width, height, draft.settings.cropX, 'frame.jpg', pathToFileURL(font).href)}</body></html>`
+  const html = `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src file:; font-src file:; style-src 'unsafe-inline'"><style>html,body{margin:0;width:100%;height:100%;overflow:hidden}</style></head><body>${coverArtworkHTML('export', { params: look, palette: settings.palette }, width, height, draft.settings.cropX, 'frame.jpg', pathToFileURL(font).href)}</body></html>`
   const file = path.join(directory, 'cover.html')
   await writeFile(file, html, { flag: 'wx' })
   const partition = session.fromPartition('cover-' + path.basename(directory), { cache: false })
@@ -51,7 +53,7 @@ export async function renderCover(ffmpeg: string, input: string, frameMs: number
     window.webContents.debugger.attach('1.3')
     await window.webContents.debugger.sendCommand('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false })
     requestSignal.throwIfAborted()
-    const text = { title: settings.title || draft.title, subtitle: settings.subtitle, badge: settings.badge, portrait, style: settings.style, height }
+    const text = { title: settings.title || draft.title, subtitle: settings.subtitle, badge: settings.badge, portrait, style: look.layout, height }
     // User strings reach textContent through JSON; they never become HTML or CSS.
     const fit = await window.webContents.executeJavaScript(`(${layoutCoverArtwork.toString()})(document.querySelector('[data-cover-artwork="export"]'), ${JSON.stringify(text)})`)
     if (!fit) throw clipError('coverText')

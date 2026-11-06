@@ -9,7 +9,11 @@ import { parseCaptionTrack, type CaptionTrack as RawTrack } from './vendor/capti
 import type { PipelineResult } from './vendor/types'
 import { legacyDocumentSchema } from '../../../shared/project-import'
 
-type ExportFormat = 'txt' | 'md' | 'srt' | 'vtt' | 'soft' | 'burn' | 'burn-bilingual' | 'video'
+type ExportFormat = 'txt' | 'md' | 'srt' | 'vtt' | 'soft' | 'burn' | 'video'
+/** Which tracks a subtitle video uses, and the resolved library style for burn-in. */
+export type VideoCaptions = { captions: 'current' | 'bilingual'; style?: import('../../../shared/styles').SubtitleStyleParams }
+type CaptionMode = 'soft' | 'soft-bilingual' | 'burn' | 'burn-bilingual'
+const trackRole = (language: string) => /^zh(?:-|$)/i.test(language) ? 'zh' as const : /^en(?:-|$)/i.test(language) ? 'en' as const : 'other' as const
 type StoredDocument = ProcessingDocument & { sourcePath: string; sourceSignature: string; trackData: Record<string, Caption[]>; trackSpeakers: Record<string, ProcessingDocument['speakers']>; exportPaths: string[]; pending?: { action: 'transcribe' | 'recognize' | 'speakers'; speakers: Settings['transcriptionSpeakers']; remote?: import('../../../shared/clipping').ProviderSnapshot; resuming?: boolean } }
 const extensions = new Set(['.mp4', '.mkv', '.webm', '.mov', '.avi', '.m4v', '.mp3', '.m4a', '.wav', '.flac', '.ogg', '.opus', '.aac', '.ts'])
 const busy = (doc: ProcessingDocument) => doc.status === 'running' || doc.status === 'queued'
@@ -44,7 +48,11 @@ export class ProcessingService {
     return { documents: [...this.documents.values()].map(doc => this.summary(doc)).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)), models: this.models.statuses(this.settings().captionLanguages[0] || this.settings().locale), runtime: 'sherpa-onnx · CPU · offline' }
   }
   private summary(doc: StoredDocument): ProcessingSummary { return { id: doc.id, title: doc.title, sourceName: doc.sourceName, jobId: doc.jobId, durationSeconds: doc.durationSeconds, status: doc.status, stage: doc.stage, progress: doc.progress, eta: doc.eta, error: doc.error, updatedAt: doc.updatedAt, captionCount: doc.captions.length, language: doc.language, model: doc.model, retryable: Boolean(doc.pending && (doc.status === 'failed' || doc.status === 'cancelled')) } }
-  get(id: string): ProcessingDocument { const doc = this.require(id); return { ...this.summary(doc), revision: doc.revision, captions: doc.captions, speakers: doc.speakers, tracks: doc.tracks, activeTrack: doc.activeTrack, sourceUrl: doc.sourceUrl, exports: doc.exports } }
+  get(id: string): ProcessingDocument { const doc = this.require(id); return { ...this.summary(doc), revision: doc.revision, captions: doc.captions, speakers: doc.speakers, tracks: doc.tracks.map(track => ({ ...track, count: (track.id === doc.activeTrack ? doc.captions : doc.trackData[track.id])?.length || 0 })), activeTrack: doc.activeTrack, sourceUrl: doc.sourceUrl, subtitleStyle: doc.subtitleStyle, bilingual: this.bilingual(doc), exports: doc.exports } }
+  /** The zh and en tracks a bilingual export would pair, for the live export preview. */
+  private bilingual(doc: StoredDocument): ProcessingDocument['bilingual'] {
+    try { const [first, second] = this.exportTracks(doc, 'burn-bilingual'); return first.role === 'zh' ? { zh: first.captions, en: second.captions } : { zh: second.captions, en: first.captions } } catch { return undefined }
+  }
   private require(id: string): StoredDocument { const doc = this.documents.get(id); if (!doc) throw new Error('Media document not found'); return doc }
   media(id: string): string { const doc = this.require(id); if (!existsSync(doc.sourcePath) || signature(doc.sourcePath) !== doc.sourceSignature) throw new Error('Source media is missing or changed'); return doc.sourcePath }
   private folder(id: string): string { const directory = path.join(this.directory, id); mkdirSync(directory, { recursive: true }); return directory }
@@ -76,14 +84,14 @@ export class ProcessingService {
       activeTrack:active?.id, exportPaths:[],exports:[] }
     this.documents.set(doc.id,doc); this.save(doc); return this.get(doc.id)
   }
-  private addTrack(doc: StoredDocument, text: string, format: RawTrack['format'], language: string, source: 'platform' | 'file', name: string, deduplicate = true): void {
+  private addTrack(doc: StoredDocument, text: string, format: RawTrack['format'], language: string, source: 'platform' | 'file', name: string, deduplicate = true, automatic = false): void {
     const cues = parseCaptionTrack(text, format).filter(cue => Number.isFinite(cue.startMs) && Number.isFinite(cue.endMs) && cue.endMs > cue.startMs && cue.text.trim())
     if (!cues.length) return
     const held = doc.tracks.find(track => track.language === language && track.source === source)
     if (held && deduplicate) return
     const id = randomUUID(), speakers = new Map<string, string>()
     const captions = cues.map(cue => { if (cue.speaker && !speakers.has(cue.speaker)) speakers.set(cue.speaker, randomUUID()); return { id: randomUUID(), text: cue.text, startMs: Math.round(cue.startMs), endMs: Math.round(cue.endMs), speakerId: cue.speaker ? speakers.get(cue.speaker)! : null } })
-    doc.tracks.push({ id, language, source, name }); doc.trackData[id] = captions; doc.trackSpeakers[id] = [...speakers].map(([name, id]) => ({ id, name }))
+    doc.tracks.push({ id, language, source, name, ...(automatic ? { automatic } : {}) }); doc.trackData[id] = captions; doc.trackSpeakers[id] = [...speakers].map(([name, id]) => ({ id, name }))
     if (!doc.activeTrack) {
       doc.activeTrack = id; doc.captions = captions; doc.language = language; doc.status = 'completed'; doc.captionCount = captions.length
       doc.speakers = doc.trackSpeakers[id]
@@ -128,7 +136,7 @@ export class ProcessingService {
       if (!result.tracks.length) throw new Error('No platform subtitles were found for the chosen languages')
       if (doc.activeTrack) { doc.trackData[doc.activeTrack] = doc.captions; doc.trackSpeakers[doc.activeTrack] = doc.speakers }
       const known = new Set(doc.tracks.map(track => track.id))
-      for (const track of result.tracks) this.addTrack(doc, readFileSync(track.file, 'utf8'), 'srt', track.language, 'platform', `Platform · ${track.language}${track.automatic ? ' (auto)' : ''}`)
+      for (const track of result.tracks) this.addTrack(doc, readFileSync(track.file, 'utf8'), 'srt', track.language, 'platform', `Platform · ${track.language}`, true, track.automatic)
       const added = doc.tracks.find(track => !known.has(track.id))
       if (added) { doc.activeTrack = added.id; doc.captions = doc.trackData[added.id]; doc.speakers = doc.trackSpeakers[added.id] || []; doc.language = added.language; doc.captionCount = doc.captions.length }
       doc.sourceUrl = url; doc.revision++; doc.status = 'completed'; doc.stage = undefined; doc.progress = 1
@@ -239,8 +247,25 @@ export class ProcessingService {
     doc.captionCount = doc.captions.length; doc.revision++; doc.status = 'completed'; doc.progress = 1; doc.stage = result.resultKind === 'no-speech' ? 'no-speech' : undefined; doc.pending = undefined; this.save(doc)
     rmSync(wav, { force: true })
   }
-  export(id: string, format: ExportFormat, output: string): Promise<ProcessingDocument> {
-    return this.track(this.exportDocument(id, format, output))
+  export(id: string, format: ExportFormat, output: string, options: VideoCaptions = { captions: 'current' }): Promise<ProcessingDocument> {
+    return this.track(this.exportDocument(id, format, output, options))
+  }
+  /** Default subtitle style for this media; drafts created afterwards start with it. */
+  setStyle(id: string, styleId: string): ProcessingDocument { const doc = this.require(id); doc.subtitleStyle = styleId; this.save(doc); return this.get(id) }
+  replaceStyle(id: string, base: string): void { for (const doc of this.documents.values()) if (doc.subtitleStyle === id) { doc.subtitleStyle = base; this.save(doc) } }
+  styleUsage(id: string): number { return [...this.documents.values()].filter(doc => doc.subtitleStyle === id).length }
+  /** One real burned frame, rendered exactly like a burn-in export. */
+  async frame(id: string, timeMs: number, options: VideoCaptions): Promise<string> {
+    const doc = this.require(id)
+    if (!doc.captions.length) throw new Error('No subtitles to export')
+    const chosen = this.exportTracks(doc, options.captions === 'bilingual' ? 'burn-bilingual' : 'burn'), folder = this.folder(id)
+    const captionTracks = chosen.map((track, index) => ({ file: path.join(folder, `frame-${index}.srt`), language: track.language, role: track.role }))
+    const output = path.join(folder, `frame-${randomUUID()}.jpg`)
+    try {
+      chosen.forEach((track, index) => writeFileSync(captionTracks[index].file, exportCaptions({ ...this.get(id), captions: track.captions }, 'srt'), { mode: 0o600 }))
+      await this.engine.request({ operation: 'caption-frame', input: this.media(id), output, timeMs: Math.max(0, Math.round(timeMs)), renderMode: options.captions === 'bilingual' ? 'burn-bilingual' : 'burn', captionTracks, subtitleStyle: options.style })
+      return 'data:image/jpeg;base64,' + readFileSync(output).toString('base64')
+    } finally { rmSync(output, { force: true }); for (const track of captionTracks) rmSync(track.file, { force: true }) }
   }
   /** Shutdown waits for exports and platform fetches that own files in the document folder. */
   private track<T>(work: Promise<T>): Promise<T> {
@@ -250,33 +275,34 @@ export class ProcessingService {
     return work
   }
   /** zh and en tracks (active first) pair into bilingual output; other languages travel as-is. */
-  private exportTracks(doc: StoredDocument, format: 'soft' | 'burn' | 'burn-bilingual'): { language: string; role: 'zh' | 'en' | 'other'; captions: Caption[] }[] {
-    const role = (language: string) => /^zh(?:-|$)/i.test(language) ? 'zh' as const : /^en(?:-|$)/i.test(language) ? 'en' as const : 'other' as const
-    if (format === 'burn') { const language = doc.tracks.find(track => track.id === doc.activeTrack)?.language || doc.language || 'und'; return [{ language, role: role(language), captions: doc.captions }] }
+  private exportTracks(doc: StoredDocument, format: CaptionMode): { language: string; role: 'zh' | 'en' | 'other'; captions: Caption[] }[] {
+    const role = trackRole
+    if (format === 'burn' || format === 'soft') { const language = doc.tracks.find(track => track.id === doc.activeTrack)?.language || doc.language || 'und'; return [{ language, role: role(language), captions: doc.captions }] }
     const ordered = [...doc.tracks.filter(track => track.id === doc.activeTrack), ...doc.tracks.filter(track => track.id !== doc.activeTrack)]
     const chosen: ReturnType<ProcessingService['exportTracks']> = [], languages = new Set<string>()
     for (const track of ordered) {
       const captions = track.id === doc.activeTrack ? doc.captions : doc.trackData[track.id], kind = role(track.language)
       if (!captions?.length || (kind === 'other' ? languages.has(track.language.toLowerCase()) : chosen.some(item => item.role === kind))) continue
-      if (kind === 'other' && (format !== 'soft' || chosen.filter(item => item.role === 'other').length >= 2)) continue
+      if (kind === 'other' && (format !== 'soft-bilingual' || chosen.filter(item => item.role === 'other').length >= 2)) continue
       chosen.push({ language: track.language, role: kind, captions }); languages.add(track.language.toLowerCase())
     }
-    if (format === 'burn-bilingual' && !(chosen.some(item => item.role === 'zh') && chosen.some(item => item.role === 'en'))) throw new Error('Bilingual burn-in needs a Chinese and an English subtitle track')
+    if (!(chosen.some(item => item.role === 'zh') && chosen.some(item => item.role === 'en'))) throw new Error('Bilingual subtitles need a Chinese and an English subtitle track')
     return chosen
   }
-  private async exportDocument(id: string, format: ExportFormat, output: string): Promise<ProcessingDocument> {
+  private async exportDocument(id: string, format: ExportFormat, output: string, options: VideoCaptions): Promise<ProcessingDocument> {
     const doc = this.require(id); this.editable(doc)
     if (format !== 'txt' && format !== 'md' && format !== 'video' && !doc.captions.length) throw new Error('No subtitles to export')
     if (path.resolve(output) === path.resolve(doc.sourcePath) || existsSync(output)) throw new Error('Choose a new output file; originals are never overwritten')
     if (format === 'txt' || format === 'md' || format === 'srt' || format === 'vtt') {
       writeFileSync(output, exportCaptions(this.get(id), format), { flag: 'wx', mode: 0o600 })
     } else {
-      const chosen = format === 'video' ? [] : this.exportTracks(doc, format)
+      const bilingual = options.captions === 'bilingual'
+      const chosen = format === 'video' ? [] : this.exportTracks(doc, format === 'soft' ? bilingual ? 'soft-bilingual' : 'soft' : bilingual ? 'burn-bilingual' : 'burn')
       const captionTracks = chosen.map((track, index) => ({ file: path.join(this.folder(id), `export-${index}.srt`), language: track.language, role: track.role }))
       const controller = new AbortController(); this.active.set(id, controller); doc.status = 'running'; doc.stage = 'exporting'; doc.progress = 0; doc.eta = undefined; doc.error = undefined; this.changed()
       try {
         chosen.forEach((track, index) => writeFileSync(captionTracks[index].file, exportCaptions({ ...this.get(id), captions: track.captions }, 'srt'), { mode: 0o600 }))
-        await this.engine.request({ operation: 'render', input: doc.sourcePath, output, renderMode: format, captionTracks, outputResolution: this.settings().outputResolution }, controller.signal, event => { if (event.kind === 'processing') { doc.progress = typeof event.progress === 'number' ? event.progress : undefined; doc.eta = typeof event.eta === 'number' ? event.eta : undefined; this.changed() } })
+        await this.engine.request({ operation: 'render', input: doc.sourcePath, output, renderMode: format === 'burn' && bilingual ? 'burn-bilingual' : format, captionTracks, subtitleStyle: options.style, outputResolution: this.settings().outputResolution }, controller.signal, event => { if (event.kind === 'processing') { doc.progress = typeof event.progress === 'number' ? event.progress : undefined; doc.eta = typeof event.eta === 'number' ? event.eta : undefined; this.changed() } })
         doc.status = 'completed'; doc.stage = undefined; doc.progress = 1
       } catch (error) { doc.status = controller.signal.aborted ? 'cancelled' : 'failed'; doc.error = controller.signal.aborted ? undefined : redact(error instanceof Error ? error.message : String(error)); throw error }
       finally { this.active.delete(id); doc.eta = undefined; for (const track of captionTracks) rmSync(track.file, { force: true }); this.save(doc); this.pump() }

@@ -6,6 +6,7 @@ authorized by Electron main; yt-dlp is only imported for the fetch operation.
 """
 import html
 import re
+import shutil
 import subprocess
 import unicodedata
 from pathlib import Path
@@ -87,7 +88,7 @@ def wrap_caption(body, size, width):
     # The bundled libass may lack Unicode line breaking. Supply safe CJK breaks
     # explicitly and keep Latin words together; libass can refine Latin wrapping.
     # Noto's ASS em is about 0.67 of the requested size; use a little spare width.
-    limit = max(1, (width - 144) / (size * 0.75))
+    limit = max(1, width / (size * 0.75))
     tokens = re.findall(r"[A-Za-z0-9_]+(?:['’\-][A-Za-z0-9_]+)*|\s+|.", body)
 
     def units(text):
@@ -134,11 +135,49 @@ def paginate_caption(start, end, body, max_lines=2):
     return result
 
 
-def write_ass(filename, tracks, source_width, source_height):
-    """Bottom-centred Noto Sans CJK SC Bold, zh 64 / other 60 on a 1080p short edge."""
+# The former Galaxy Downloader burn-in look; used when a request carries no style.
+CLASSIC_STYLE = {'weight': 'bold', 'size': 5.9, 'color': '#ffffff', 'outlineColor': '#121b25', 'outline': 3, 'shadow': 1.5,
+                 'box': False, 'boxColor': '#000000', 'boxOpacity': .6, 'bottom': 7.4, 'side': 6.7, 'maxLines': 2,
+                 'secondaryScale': .94, 'secondaryColor': '#ffffff', 'order': 'zh-first'}
+
+
+def ass_color(value, opacity=1.0):
+    """#rrggbb plus opacity to ASS &HAABBGGRR (alpha 00 is opaque)."""
+    red, green, blue = value[1:3], value[3:5], value[5:7]
+    alpha = round((1 - max(0.0, min(1.0, opacity))) * 255)
+    return f'&H{alpha:02X}{blue}{green}{red}'.upper()
+
+
+def copy_fonts(fonts, directory):
+    """Copy both weights so libass can honour regular and bold library styles."""
+    target = Path(directory) / 'fonts'
+    target.mkdir(exist_ok=True)
+    for name in ('NotoSansCJKsc-Regular.otf', 'NotoSansCJKsc-Bold.otf'):
+        if (Path(fonts) / name).is_file():
+            shutil.copyfile(Path(fonts) / name, target / name)
+
+
+def write_ass(filename, tracks, source_width, source_height, style=None):
+    """Render cue tracks with a library subtitle style on a 1080 short-edge canvas.
+
+    `tracks` maps a role ('zh', 'en', 'other') to cues. With two tracks the first
+    row is primary and the second uses the style's secondary scale and colour.
+    """
+    style = {**CLASSIC_STYLE, **(style or {})}
     source_width, source_height = source_width or 1920, source_height or 1080
     scale = 1080 / min(source_width, source_height)
     width, height = max(320, round(source_width * scale)), max(320, round(source_height * scale))
+    size = round(style['size'] * 1080 / 100)
+    margin_x, margin_y = round(style['side'] * width / 100), round(style['bottom'] * height / 100)
+    bold = -1 if style['weight'] == 'bold' else 0
+    if style['box']:
+        # libass draws BorderStyle 3 boxes in the outline colour; Outline is the padding.
+        border, outline, outline_color = 3, max(4, round(size * .22)), ass_color(style['boxColor'], style['boxOpacity'])
+        shadow, back = 0, ass_color('#000000', 0)
+    else:
+        border, outline, outline_color = 1, style['outline'], ass_color(style['outlineColor'])
+        shadow, back = style['shadow'], ass_color('#000000', .38)
+    primary = ass_color(style['color'])
     header = f'''[Script Info]
 ScriptType: v4.00+
 PlayResX: {width}
@@ -148,34 +187,37 @@ ScaledBorderAndShadow: yes
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Default,Noto Sans CJK SC,64,&H00FFFFFF,&H00FFFFFF,&H00251B12,&H60251B12,-1,0,0,0,100,100,0,0,1,3,1.5,2,72,72,80,1
+Style: Default,Noto Sans CJK SC,{size},{primary},{primary},{outline_color},{back},{bold},0,0,0,100,100,0,0,{border},{outline},{shadow},2,{margin_x},{margin_x},{margin_y},1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 '''
+    roles = list(tracks)
+    if len(roles) == 2 and style['order'] == 'en-first' and roles[0] == 'zh':
+        roles.reverse()
+    sizes = [size if index == 0 else round(size * style['secondaryScale']) for index in range(len(roles))]
+    colors = ['' if index == 0 else '\\c' + ass_color(style['secondaryColor']) for index in range(len(roles))]
+    available = max(1, width - 2 * margin_x)
     lines = []
-    languages = list(tracks)
     prepared = []
-    for language, cues in tracks.items():
+    for role, row_size in zip(roles, sizes):
         pages = []
-        for start, end, body in cues:
+        for start, end, body in tracks[role]:
             body = ' '.join(body.split())
             body = body.replace('\\', '＼').replace('{', '｛').replace('}', '｝')
-            size = 64 if language == 'zh' else 60
-            pages.extend(paginate_caption(start, end, wrap_caption(body, size, width)))
+            pages.extend(paginate_caption(start, end, wrap_caption(body, row_size, available), style['maxLines']))
         prepared.append(pages)
     # Split each source language before sweeping boundaries, so another
     # language's cue changes cannot restart a long sentence's pagination.
     for start, end, bodies in subtitle_intervals(prepared):
         # Overlapping source cues can exceed the cap even after each cue was
         # split. Cap their combined display as well without discarding text.
-        pages = [paginate_caption(start, end, body.replace('\n', r'\N')) for body in bodies]
+        pages = [paginate_caption(start, end, body.replace('\n', r'\N'), style['maxLines']) for body in bodies]
         for page_start, page_end, page_bodies in subtitle_intervals(pages):
             rows = []
-            for language, body in zip(languages, page_bodies):
-                size = 64 if language == 'zh' else 60
+            for body, row_size, row_color in zip(page_bodies, sizes, colors):
                 # Reserve the missing row during temporary bilingual gaps.
-                rows.append(f'{{\\fs{size}}}' + (body or r'\h'))
+                rows.append(f'{{\\fs{row_size}{row_color}}}' + (body or r'\h'))
             body = r'\N'.join(rows)
             lines.append(f'Dialogue: 0,{timestamp(page_start, True)},{timestamp(page_end, True)},Default,,0,0,0,,{body}\n')
     Path(filename).write_text(header + ''.join(lines), encoding='utf-8')

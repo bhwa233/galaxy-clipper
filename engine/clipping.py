@@ -8,11 +8,7 @@ import textwrap
 from pathlib import Path
 
 from media_processing import inspect
-
-
-def clock(ms):
-    ms = max(0, round(ms))
-    return f'{ms // 3600000:02}:{ms // 60000 % 60:02}:{ms // 1000 % 60:02},{ms % 1000:03}'
+from subtitles import write_ass
 
 
 def execute(args, directory, emit, total, base, share):
@@ -104,38 +100,12 @@ def run(request, emit):
             if fonts.exists():
                 shutil.copytree(fonts, folder / 'fonts')
             if settings['subtitles'] and request.get('clipCaptions'):
+                # The library style is laid out on the rendered canvas by the same
+                # ASS writer as source burn-in, so drafts and exports look alike.
                 canvas = inspect(ffmpeg, str(folder / 'part-0.mkv'), details=True)
-                width, height = canvas['width'], canvas['height']
-                font_size = max(12, round(min(width, height) / 24))
-                if settings['subtitleStyle'] == 'bold':
-                    font_size = round(font_size * 26 / 22)
-                margin_x, margin_y = max(8, round(width * .06)), max(8, round(height * .055))
-                line_width = max(1, math.floor((width - 2 * margin_x) / (font_size * 1.15)))
-                captions = []
-                for cue in request['clipCaptions']:
-                    if cue['endMs'] > cue['startMs']:
-                        # Reuse stdlib wrapping and FFmpeg's SRT-to-ASS conversion:
-                        # the SRT filter's implicit 384x288 canvas and optional
-                        # Unicode wrapping cannot contain long unspaced CJK cues.
-                        lines = [line for paragraph in cue['text'].splitlines() for line in
-                                 (textwrap.wrap(paragraph, width=line_width, replace_whitespace=False,
-                                                drop_whitespace=False) or [''])]
-                        if len(lines) * font_size * 1.5 > height - 2 * margin_y:
-                            raise ValueError('Subtitle is too long to fit the frame; split the cue in the subtitle editor')
-                        text = '\n'.join(lines)
-                        captions.append(f"{len(captions) + 1}\n{clock(cue['startMs'])} --> {clock(cue['endMs'])}\n{text}\n")
-                (folder / 'captions.srt').write_text('\n'.join(captions), encoding='utf-8')
-                execute([*base, '-i', 'captions.srt', 'captions.ass'], directory, emit, total, .7, 0)
-                ass = folder / 'captions.ass'
-                ass.write_text(ass.read_text(encoding='utf-8').replace('PlayResX: 384', f'PlayResX: {width}')
-                               .replace('PlayResY: 288', f'PlayResY: {height}'), encoding='utf-8')
-                style = (f'FontName=Noto Sans CJK SC,FontSize={font_size},Outline={max(1, round(min(width, height) / 360))},'
-                         f'Shadow=0,MarginL={margin_x},MarginR={margin_x},MarginV={margin_y}')
-                if settings['subtitleStyle'] == 'bold':
-                    style += ',Bold=1'
-                elif settings['subtitleStyle'] == 'box':
-                    style += ',BorderStyle=3,BackColour=&H90000000'
-                filters.append("subtitles=filename=captions.ass:fontsdir=fonts:force_style='" + style + "'")
+                cues = [(cue['startMs'], cue['endMs'], cue['text']) for cue in request['clipCaptions'] if cue['endMs'] > cue['startMs']]
+                write_ass(folder / 'captions.ass', {'other': cues}, canvas['width'], canvas['height'], request.get('clipSubtitleStyle'))
+                filters.append('ass=filename=captions.ass:fontsdir=fonts')
             if settings['title'].strip():
                 title = settings['title'].replace('\n', ' ').replace('\r', ' ')
                 (folder / 'title.txt').write_text('\n'.join(textwrap.wrap(title, width=24)), encoding='utf-8')

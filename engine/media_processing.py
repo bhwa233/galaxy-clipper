@@ -11,7 +11,7 @@ import time
 from fractions import Fraction
 from pathlib import Path
 
-from subtitles import compose_bilingual, read_cues, write_ass, write_srt
+from subtitles import compose_bilingual, copy_fonts, read_cues, write_ass, write_srt
 
 
 def inspect(ffmpeg, source, details=False):
@@ -93,6 +93,9 @@ def run(request, emit):
                 tracks.append({**track, 'file': str(output)})
         emit('result', result={'tracks': tracks})
         return
+    if operation == 'caption-frame':
+        caption_frame(request, emit, ffmpeg, source)
+        return
     if operation != 'render':
         raise ValueError('Unknown local media operation')
     render(request, emit, ffmpeg, source, metadata)
@@ -127,6 +130,37 @@ def run_ffmpeg(args, directory, emit, duration):
         if process.wait() != 0:
             errors.seek(0)
             raise RuntimeError(errors.read().decode('utf-8', 'replace')[-4000:])
+
+
+def prepare_burn(request, ffmpeg, source, directory, mode, tracks):
+    """Write captions.ass and fonts/ into the FFmpeg working directory."""
+    zh = next((track for track in tracks if track['role'] == 'zh'), None)
+    en = next((track for track in tracks if track['role'] == 'en'), None)
+    if mode == 'burn-bilingual':
+        if not (zh and en):
+            raise ValueError('Bilingual burn-in needs a Chinese and an English subtitle track')
+        chosen = {'zh': read_cues(zh['file'], False), 'en': read_cues(en['file'], False)}
+    else:
+        chosen = {tracks[0]['role']: read_cues(tracks[0]['file'], False)} if tracks else {}
+    if not any(chosen.values()):
+        raise ValueError('No subtitles to burn')
+    size = inspect(ffmpeg, source, details=True)
+    write_ass(Path(directory) / 'captions.ass', chosen, size['width'], size['height'], request.get('subtitleStyle'))
+    copy_fonts(bundled_fonts(ffmpeg), directory)
+
+
+def caption_frame(request, emit, ffmpeg, source):
+    """One real burned frame at timeMs, rendered exactly like the export."""
+    output, at = Path(request['output']), max(0, request.get('timeMs', 0)) / 1000
+    with tempfile.TemporaryDirectory(prefix='galaxy-frame-') as directory:
+        prepare_burn(request, ffmpeg, source, directory, request.get('renderMode', 'burn'), request.get('captionTracks') or [])
+        # Input seeking restarts timestamps at zero; shift them back for the ASS timeline.
+        process = subprocess.run([ffmpeg, '-hide_banner', '-nostdin', '-y', '-loglevel', 'error', '-ss', str(at), '-i', source,
+                                  '-vf', f"setpts=PTS+{at}/TB,ass=filename=captions.ass:fontsdir=fonts,scale=w='min(1280,iw)':h=-2",
+                                  '-frames:v', '1', '-q:v', '3', str(output)], cwd=directory, capture_output=True, timeout=60)
+        if process.returncode or not output.is_file():
+            raise RuntimeError(process.stderr.decode('utf-8', 'replace')[-2000:] or 'Could not render a preview frame')
+    emit('result', result={'file': str(output)})
 
 
 def language_code(language):
@@ -178,18 +212,7 @@ def render(request, emit, ffmpeg, source, metadata):
         else:
             args += ['-map', '0:v:0', '-map', '0:a?']
             if mode in ('burn', 'burn-bilingual'):
-                if mode == 'burn-bilingual' and not (zh and en):
-                    raise ValueError('Bilingual burn-in needs a Chinese and an English subtitle track')
-                if mode == 'burn-bilingual':
-                    chosen = {'zh': read_cues(zh['file'], False), 'en': read_cues(en['file'], False)}
-                else:
-                    chosen = {tracks[0]['role']: read_cues(tracks[0]['file'], False)} if tracks else {}
-                if not any(chosen.values()):
-                    raise ValueError('No subtitles to burn')
-                size = inspect(ffmpeg, source, details=True)
-                write_ass(Path(directory) / 'captions.ass', chosen, size['width'], size['height'])
-                (Path(directory) / 'fonts').mkdir()
-                shutil.copyfile(bundled_fonts(ffmpeg) / 'NotoSansCJKsc-Bold.otf', Path(directory) / 'fonts' / 'caption.otf')
+                prepare_burn(request, ffmpeg, source, directory, mode, tracks)
                 # Fixed relative names keep drive colons and apostrophes out of FFmpeg's filter language.
                 filters.append('ass=filename=captions.ass:fontsdir=fonts')
             resolution = request.get('outputResolution', 'original')

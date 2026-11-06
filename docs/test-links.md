@@ -47,3 +47,31 @@
   - 引擎直接验证软字幕 MKV：三条 subrip 轨，标题与默认轨正确。
 - 探针中发现并修复三个原有界面问题：字幕页与剪辑页同级组件共用 `key`，切换工具后旧面板残留叠在网格里（界面错乱）；左右面板缺少纵向 flex，内容超出格子无法滚动；进度只更新摘要，打开的文档不刷新，进度条与剩余时间不动。修复后网格内只剩 3 个面板、控制台无重复 key 警告。
 - 未验证：远端转写（按范围不测）；需要登录的平台字幕（客户端不带 Cookie）；各平台安装包内的 yt-dlp 打包结果。探针脚本与测试媒体已删除。
+
+## 流程化界面与风格库
+
+验证日期：2026-11-06（Asia/Shanghai）
+
+- `pnpm check`：通过。
+- 真实客户端探针（Playwright 启动 Electron，隔离 `CLIENT_TEST_DATA`，只替换系统文件对话框；测试素材为 TED 演讲 arj7oStGLkU 与 jNQXAC9IVRw 的 360p 下载）：
+  - 左侧六个步骤：导入前 4 个步骤置灰（`aria-disabled`）；导入后“下一步：字幕”可用；字幕获取完成后可进入导出，选片因无候选仍锁定。
+  - 字幕页：两张字幕轨卡片显示“zh-CN 人工 316 条”“en 人工 315 条”；预览叠加当前字幕；选中字幕后预览下方出现编辑条（起点 / 终点设为当前、保存）；“生成真实帧”返回实际烧录的一帧。
+  - 新建自定义字幕风格（字号 8%、黄色）并设为素材默认风格；导出页默认沿用，双语模式列出“中文 zh-CN 人工 / 英文 en 人工”；软字幕 MP4 含 中文 / English / 中文 + English 三轨；另一素材用自定义风格烧录当前轨，截帧确认黄色大字。
+  - 设置 → 风格库：新建自定义封面风格（游戏高光版式、自定义颜色、标题 1.2 倍）并保存，删除时提示使用情况，删除后列表移除。
+  - 全程控制台无错误。
+- 引擎直接验证：`caption-frame` 输出综艺风格中英双语帧；`clip-render` 用底框风格渲染竖屏模糊背景草稿，长句按两行换行。
+- 探针中发现并修复：下一步栏与属性栏共享网格单元时自动排布把面板挤到新行（改为每个面板固定列）；侧边抽屉宽度被组件默认 `max-w-sm` 覆盖；空任务卡留下空白条。
+- 未验证：AI 选片、草稿页与封面页的实际操作（需要云端文字模型配置，本轮未配置）；封面 JPG 导出；远端转写（按范围不测）。探针脚本与测试媒体已删除。
+
+## 命令行 `clipper`
+
+验证日期：2026-11-06（Asia/Shanghai）
+
+- `pnpm check`：通过，同时产出 `dist-electron/cli/clipper.mjs`。
+- 用隔离数据目录和 `CLIPPER_SOCKET` 启动一个 `--background` 客户端（不显示窗口），用构建出的 CLI 跑完整流程：
+  - `status`：显示版本、引擎就绪、输出目录、字幕语言、“AI 选片未配置”。
+  - `media import` 导入两个 YouTube 下载文件，`--json` 返回 id、时长、来源链接；`media list` 列出两项。
+  - `subtitles fetch` 自动使用元数据里的链接：TED 得到 zh-CN（人工 316 条）、en（人工 315 条），jNQXAC9IVRw 得到 en；`subtitles use … en`、`subtitles show --limit 3`、`subtitles style … variety` 均生效；`styles list` / `styles show classic` 正常。
+  - `export captions` 写出 SRT；`export video --captions bilingual --method soft` 写出 MKV（zho / eng / zho 默认三条字幕轨）；`export video --method burn --style large` 写出 MP4，截帧确认大字风格。
+  - 失败路径：输出文件已存在 → 退出码 1；无中英双语轨 → 2；未配置云端模型执行 `analyze` → 2；无候选执行 `drafts create` → 2；模型未安装执行 `subtitles recognize --wait` → 2；未知素材 → 1；通道地址不可达 → 4。
+- 未验证：安装版的命令注册与 PATH 写入（开发实例按设计不改 PATH，本轮未打包安装）；`analyze`、`drafts set`、`export clip`、`export cover` 的成功路径（需要云端文字模型配置）；客户端未运行时由安装版启动器自动后台启动。探针数据已删除。

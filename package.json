@@ -12,11 +12,13 @@
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.node.json --noEmit",
     "lint": "eslint .",
     "processing:build": "vite build --config vite.processing.config.ts",
-    "build": "pnpm typecheck && vite build && pnpm processing:build",
+    "build": "pnpm typecheck && vite build && pnpm processing:build && pnpm cli:build",
     "check": "pnpm typecheck && pnpm lint && pnpm build",
     "engine:dev": "node scripts/prepare-engine.mjs",
     "engine:build": "node scripts/prepare-engine.mjs --bundle",
-    "package": "pnpm engine:build && pnpm build && electron-builder --publish never"
+    "package": "pnpm engine:build && pnpm build && electron-builder --publish never",
+    "cli:build": "vite build --config vite.cli.config.ts",
+    "clipper": "pnpm cli:build && node scripts/clipper-dev.mjs"
   },
   "dependencies": {
     "electron-log": "^5.4.4",
@@ -38,6 +40,7 @@
     "@vitejs/plugin-react": "^6.0.2",
     "class-variance-authority": "^0.7.1",
     "cn": "^0.4.0",
+    "commander": "^15.0.0",
     "electron": "^44.4.5",
     "electron-builder": "^26.8.1",
     "eslint": "^9.39.4",

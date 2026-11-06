@@ -5,10 +5,17 @@
   "invalid": "Check input limits and the filename template.",
   "helpFor": "About {{label}}",
   "advanced": {
-    "general": "Behavior & display", "download": "Other download settings", "files": "Folders & covers",
-    "transcription": "Local transcription", "output": "File information & covers", "accounts": "Session management", "diagnostics": "Diagnostics and logs"
+    "general": "Behavior & display",
+    "download": "Other download settings",
+    "files": "Folders & covers",
+    "transcription": "Local transcription",
+    "output": "File information & covers",
+    "accounts": "Session management",
+    "diagnostics": "Diagnostics and logs"
   },
-  "subscriptions": { "intervalHint": "Checks every 24 hours by default." },
+  "subscriptions": {
+    "intervalHint": "Checks every 24 hours by default."
+  },
   "sections": {
     "subscriptions": "Subscriptions",
     "general": "General",
@@ -210,17 +217,18 @@
     "exportLogs": "Export diagnostics log",
     "allowControl": {
       "label": "Command line & agents",
-      "hint": "Set up the galaxy command for terminals and agents. Only the current user on this computer can connect."
+      "hint": "Sets up the clipper command for terminals and agents; only the current user on this computer can connect."
     },
     "commandLine": {
       "configuring": "Setting up the command line…",
-      "ready": "Enabled. Run galaxy in a new terminal.",
+      "ready": "Enabled. Run clipper in a new terminal.",
       "disabled": "Command line and agent control is disabled.",
       "needsSetup": "The command is not ready. Retry setup.",
       "failed": "Command line setup failed. Retry or check diagnostics logs.",
       "channelFailed": "The command line connection is unavailable. Close other clients and retry.",
       "enableFirst": "Enable and save command line and agent control first.",
-      "retry": "Retry command line setup"
+      "retry": "Retry command line setup",
+      "developmentHint": "Development builds leave PATH alone; run commands with pnpm clipper."
     }
   },
   "saving": "Saving…",

@@ -24,6 +24,7 @@
     "electron",
     "shared",
     "vite.config.ts",
-    "vite.processing.config.ts"
+    "vite.processing.config.ts",
+    "vite.cli.config.ts"
   ]
 }

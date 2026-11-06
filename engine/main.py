@@ -21,7 +21,7 @@ def main():
     elif operation == 'captions':
         from subtitles import fetch
         fetch(request, emit)
-    elif operation in ('unpack', 'inspect', 'audio', 'audio-chunk', 'embedded-captions', 'render'):
+    elif operation in ('unpack', 'inspect', 'audio', 'audio-chunk', 'embedded-captions', 'render', 'caption-frame'):
         from media_processing import run
         run(request, emit)
     else:

@@ -1,4 +1,8 @@
 import { coverPalettes, type CoverSettings } from './clipping'
+import { coverDefaults, type CoverStyleParams } from './styles'
+
+/** A cover style resolved from the library, plus the palette the user picked. */
+export type CoverLook = { params: CoverStyleParams; palette: CoverSettings['palette'] }
 
 export function coverDimensions(aspect: CoverSettings['aspect'], video: { width: number; height: number }) {
   const key = aspect === 'video' ? video.height > video.width ? 'portrait' : 'landscape' : aspect
@@ -6,9 +10,27 @@ export function coverDimensions(aspect: CoverSettings['aspect'], video: { width:
   return { width, height }
 }
 export const coverFontFace = (url: string) => `@font-face{font-family:GalaxyCover;src:url(${JSON.stringify(url)});font-weight:100 900}`
-export function coverArtworkHTML(scope: string, settings: Pick<CoverSettings, 'style' | 'palette'>, width: number, height: number, cropX: number, frame: string, font?: string) {
+// Parameters only add rules where they differ from their layout's defaults, so
+// built-in styles keep the layout CSS below unchanged. Values are schema-checked
+// numbers, booleans and #rrggbb colors; no user text ever reaches this CSS.
+function coverOverrides(root: string, params: CoverStyleParams, width: number): string {
+  const base = coverDefaults[params.layout], rules: string[] = []
+  // The layout class keeps overrides as specific as the layout rules they follow.
+  const scoped = `${root}.${params.layout}`, part = (name: string, body: string) => rules.push(`${scoped} [data-cover-part="${name}"]{${body}}`)
+  if (params.titleWeight !== base.titleWeight) part('title', `font-weight:${params.titleWeight}`)
+  if (params.italic !== base.italic) part('title', `font-style:${params.italic ? 'italic' : 'normal'}`)
+  if (params.stroke !== base.stroke) part('title', params.stroke ? `paint-order:stroke fill;-webkit-text-stroke:${Math.max(1, width / 500)}px #0b0b0b;text-shadow:4px 5px 0 #0b0b0b` : '-webkit-text-stroke:0;text-shadow:none')
+  if (params.shade !== base.shade) part('shade', `opacity:${params.shade}`)
+  if (params.saturation !== base.saturation || params.contrast !== base.contrast) part('photo', `filter:contrast(${params.contrast}) saturate(${params.saturation})${params.layout === 'vlog' ? ' brightness(1.06)' : ''}`)
+  if (params.badge !== base.badge) part('badge', { none: 'display:none!important', plain: 'border:0;padding:0', underline: 'border:0;border-bottom:1px solid var(--accent);padding:0 0 .5em', border: 'border:2px solid var(--accent);padding:.3em .7em' }[params.badge])
+  if (!params.bar) part('bar', 'visibility:hidden')
+  if (params.colors) { rules.push(`${scoped}{color:${params.colors.text}}`); part('subtitle', `color:${params.colors.text}`); part('badge', `color:var(--accent)`) }
+  return rules.join('\n')
+}
+export function coverArtworkHTML(scope: string, look: CoverLook, width: number, height: number, cropX: number, frame: string, font?: string) {
   if (!/^[a-z0-9_-]+$/i.test(scope)) throw new Error('Invalid cover scope')
-  const root = `[data-cover-artwork="${scope}"]`, { accent, canvas } = coverPalettes[settings.palette], portrait = height > width
+  const { params } = look, layout = params.layout, scale = params.titleScale
+  const root = `[data-cover-artwork="${scope}"]`, { accent, canvas } = params.colors || coverPalettes[look.palette], portrait = height > width
   return `<style>${font ? coverFontFace(font) : ''}
 
 ${root},${root} *{box-sizing:border-box}${root}{position:relative;width:${width}px;height:${height}px;overflow:hidden;--accent:${accent};--canvas:${canvas};background:var(--canvas);color:#eceae6;font-family:GalaxyCover,sans-serif;font-weight:400;font-style:normal;line-height:normal;letter-spacing:normal;text-align:left;white-space:normal}
@@ -16,7 +38,7 @@ ${root} [data-cover-part="photo"]{position:absolute;width:100%;height:100%;objec
 ${root} [data-cover-part="shade"]{position:absolute;inset:0;background:linear-gradient(90deg,${canvas}fa 0%,${canvas}f0 24%,${canvas}b0 52%,${canvas}18 100%)}
 ${root} [data-cover-part="content"]{position:absolute;left:6%;top:10%;width:55%;height:80%;display:flex;flex-direction:column;justify-content:center;align-items:flex-start;gap:${Math.round(width * .018)}px}
 ${root} [data-cover-part="badge"]{color:var(--accent);font-size:${Math.round(width * .021)}px;letter-spacing:.08em;white-space:pre-wrap;overflow-wrap:anywhere}
-${root} [data-cover-part="title"]{font-size:${Math.round(width * .073)}px;font-weight:900;line-height:1.16;letter-spacing:-.02em;white-space:pre-wrap;overflow-wrap:anywhere;margin:0;width:100%}
+${root} [data-cover-part="title"]{font-size:${Math.round(width * .073 * scale)}px;font-weight:900;line-height:1.16;letter-spacing:-.02em;white-space:pre-wrap;overflow-wrap:anywhere;margin:0;width:100%}
 ${root} [data-cover-part="subtitle"]{font-size:${Math.round(width * .028)}px;line-height:1.45;color:#dededb;white-space:pre-wrap;overflow-wrap:anywhere;width:100%}
 ${root} [data-cover-part="bar"]{flex-shrink:0;width:16%;height:${Math.max(5, Math.round(width * .006))}px;background:var(--accent)}
 ${root}.knowledge [data-cover-part="content"]{border-left:${Math.round(width * .006)}px solid var(--accent);padding-left:3%}
@@ -30,13 +52,14 @@ ${root}.vlog [data-cover-part="shade"]{background:linear-gradient(0deg,#f5f0e7fc
 ${root}.vlog [data-cover-part="content"]{top:auto;bottom:6%;width:85%;height:65%;justify-content:flex-end}${root}.vlog [data-cover-part="title"]{font-weight:600;line-height:1.22}${root}.vlog [data-cover-part="subtitle"]{color:#3d473e}${root}.vlog [data-cover-part="badge"]{color:#344e41}
 ${root}.general [data-cover-part="photo"]{filter:saturate(.1)}${root}.general [data-cover-part="title"]{font-weight:700}${root}.general [data-cover-part="badge"]{color:#d2d2ce}
 ${portrait ? `${root} [data-cover-part="photo"]{top:26%;height:74%}${root} [data-cover-part="shade"]{background:linear-gradient(180deg,${canvas}ff 0%,${canvas}ff 24%,${canvas}40 54%,${canvas}20 83%,${canvas}bb 100%)}
-${root} [data-cover-part="content"]{left:7%;top:5%;width:86%;height:43%;justify-content:flex-start;gap:${Math.round(width * .025)}px}${root} [data-cover-part="title"]{font-size:${Math.round(width * .108)}px;line-height:1.2}${root} [data-cover-part="subtitle"]{font-size:${Math.round(width * .037)}px}${root} [data-cover-part="badge"]{font-size:${Math.round(width * .03)}px}${root}.knowledge [data-cover-part="content"]{padding-left:3%}
+${root} [data-cover-part="content"]{left:7%;top:5%;width:86%;height:43%;justify-content:flex-start;gap:${Math.round(width * .025)}px}${root} [data-cover-part="title"]{font-size:${Math.round(width * .108 * scale)}px;line-height:1.2}${root} [data-cover-part="subtitle"]{font-size:${Math.round(width * .037)}px}${root} [data-cover-part="badge"]{font-size:${Math.round(width * .03)}px}${root}.knowledge [data-cover-part="content"]{padding-left:3%}
 ${root}.game [data-cover-part="shade"]{background:linear-gradient(180deg,${canvas}ff 0%,${canvas}ef 37%,${canvas}22 80%)}
 ${root}.vlog [data-cover-part="photo"]{top:0;height:100%}${root}.vlog [data-cover-part="content"]{top:auto;bottom:6%;height:58%;width:86%}` : ''}
-</style><div data-cover-artwork="${scope}" class="${settings.style}"><img data-cover-part="photo" src="${frame}" alt=""><div data-cover-part="shade"></div><section data-cover-part="content"><div data-cover-part="badge"></div><h1 data-cover-part="title"></h1><div data-cover-part="subtitle"></div><div data-cover-part="bar"></div></section></div>`
+${coverOverrides(root, params, width)}
+</style><div data-cover-artwork="${scope}" class="${layout}"><img data-cover-part="photo" src="${frame}" alt=""><div data-cover-part="shade"></div><section data-cover-part="content"><div data-cover-part="badge"></div><h1 data-cover-part="title"></h1><div data-cover-part="subtitle"></div><div data-cover-part="bar"></div></section></div>`
 }
 
-export type CoverArtworkText = { title: string; subtitle: string; badge: string; portrait: boolean; style: CoverSettings['style']; height: number }
+export type CoverArtworkText = { title: string; subtitle: string; badge: string; portrait: boolean; style: CoverStyleParams['layout']; height: number }
 // Shared by the live artboards and JPEG export. Work in unscaled layout pixels;
 // live cards use a CSS transform while retaining exactly the export typography.
 export async function layoutCoverArtwork(root: HTMLElement, value: CoverArtworkText, current = () => true) {

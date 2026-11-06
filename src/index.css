@@ -74,6 +74,24 @@ body { background: var(--background); color: var(--foreground); }
 /* Column flex lets each pane's body scroll inside its grid cell instead of overflowing it. */
 .editor-library { display: flex; flex-direction: column; border-right: 1px solid var(--border); }
 .editor-inspector { display: flex; flex-direction: column; border-left: 1px solid var(--border); }
+/* Explicit cells: auto-placement would push a pane to a new row whenever another
+   element (the next-step bar below) shares its cell. */
+.editor-tools { grid-column: 1; grid-row: 2; }
+.editor-library { grid-column: 2; grid-row: 2; }
+.editor-preview { grid-column: 3; grid-row: 2; }
+.editor-inspector { grid-column: 4; grid-row: 2; }
+/* "Next step" sits over the bottom of the inspector column; its body keeps room for it. */
+.editor-next {
+  grid-column: -2;
+  grid-row: 2;
+  align-self: end;
+  z-index: 5;
+  padding: .75rem 1rem;
+  border-top: 1px solid var(--border);
+  border-left: 1px solid var(--border);
+  background: color-mix(in oklab, var(--card) 92%, var(--background));
+}
+.editor-inspector > div:last-child { padding-bottom: 5rem; }
 .editor-preview {
   display: flex;
   flex-direction: column;

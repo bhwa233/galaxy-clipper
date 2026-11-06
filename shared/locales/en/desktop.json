@@ -2,7 +2,9 @@
   "notificationCompleted": "Download complete",
   "notifications": {
     "unavailable": "Could not connect to system notifications. Check system notification settings and try again.",
-    "failed": "The system could not show the notification. Check notification permissions.", "timeout": "The system did not confirm the notification. Check notification permissions and try again.", "closed": "The notification was closed."
+    "failed": "The system could not show the notification. Check notification permissions.",
+    "timeout": "The system did not confirm the notification. Check notification permissions and try again.",
+    "closed": "The notification was closed."
   },
   "coverFilename": "Cover",
   "tray": {
@@ -22,7 +24,7 @@
     "noCompletedFile": "Completed file not found",
     "openFailed": "Can't open the file: {{reason}}",
     "cliMissing": "The command line bundle is missing: {{path}}",
-    "cliForeign": "{{path}} already exists and was not written by Galaxy Downloader."
+    "cliForeign": "{{path}} already exists and was not written by Galaxy Clipper."
   },
   "update": {
     "client": "Desktop client",

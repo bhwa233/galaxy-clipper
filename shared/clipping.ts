@@ -1,5 +1,9 @@
 import { z } from 'zod'
 import { outputResolution, type Caption, type Speaker } from './processing'
+import type { CoverStyleParams, SubtitleStyleParams } from './styles'
+
+// Style references are library ids (built-in names or custom UUIDs).
+const styleRef = z.string().regex(/^[a-z0-9-]{3,64}$/i)
 
 export const cloudEndpoint = z.string().trim().max(2048).refine(value => {
   if (!value) return true
@@ -27,7 +31,7 @@ export const coverPalettes = {
   lilac: { accent: '#B69CFF', canvas: '#17151C' },
 } as const
 export const coverSettingsSchema = z.object({
-  enabled: z.boolean().default(true), style: z.enum(coverStyles).default('knowledge'),
+  enabled: z.boolean().default(true), style: styleRef.default('knowledge'),
   palette: z.enum(['azure', 'amber', 'coral', 'mint', 'lemon', 'rose', 'lilac']).default('azure'),
   aspect: z.enum(['video', 'landscape', 'portrait', 'note', 'square']).default('video'),
   title: z.string().trim().max(120).default(''), subtitle: z.string().trim().max(120).default(''), badge: z.string().trim().max(32).default(''),
@@ -36,14 +40,14 @@ export const coverSettingsSchema = z.object({
 export type CoverSettings = z.infer<typeof coverSettingsSchema>
 export type CoverFrame = { dataUrl: string; width: number; height: number; frameMs: number }
 export const sceneSchema = z.object({ id: z.string().uuid(), candidateId: z.string().uuid(), startMs: z.number().int().nonnegative(), endMs: z.number().int().positive() }).refine(value => value.endMs - value.startMs >= 100)
-export const draftSettingsSchema = z.object({ aspect: z.enum(['original', 'portrait', 'landscape']).default('original'), layout: z.enum(['fit', 'crop', 'blur']).default('fit'), cropX: z.number().min(0).max(1).default(0.5), subtitles: z.boolean().default(true), subtitleStyle: z.enum(['clean', 'bold', 'box']).default('clean'), title: z.string().trim().max(120).default(''), originalAudio: z.boolean().default(true), resolution: outputResolution.default('original'), cover: coverSettingsSchema.optional() })
+export const draftSettingsSchema = z.object({ aspect: z.enum(['original', 'portrait', 'landscape']).default('original'), layout: z.enum(['fit', 'crop', 'blur']).default('fit'), cropX: z.number().min(0).max(1).default(0.5), subtitles: z.boolean().default(true), subtitleStyle: z.preprocess(value => value === 'clean' ? 'simple' : value === 'bold' ? 'classic' : value, styleRef).default('classic'), title: z.string().trim().max(120).default(''), originalAudio: z.boolean().default(true), resolution: outputResolution.default('original'), cover: coverSettingsSchema.optional() })
 export const clipDefaultsSchema = draftSettingsSchema.omit({ title: true, resolution: true })
 export type DraftSettings = z.infer<typeof draftSettingsSchema>
 export type Draft = { id: string; title: string; revision: number; transcriptId: string; scenes: z.infer<typeof sceneSchema>[]; settings: DraftSettings; updatedAt: string }
 export const draftSaveSchema = z.object({ documentId: z.string().uuid(), id: z.string().uuid(), revision: z.number().int().nonnegative(), title: z.string().trim().min(1).max(200), scenes: z.array(sceneSchema).max(30), settings: draftSettingsSchema })
 export type RenderedMedia = { width: number; height: number; frameRate: number; audio: boolean }
-export type RenderJob = { id: string; draftId: string; revision: number; snapshot: Draft; preview: boolean; status: ClipStatus; progress?: number; stage?: string; error?: string; createdAt: string; name?: string; durationMs?: number; media?: RenderedMedia; rendererVersion?: number }
-export type CoverJob = { id: string; draftId: string; revision: number; snapshot: Draft; renderId?: string; cacheKey: string; status: ClipStatus; createdAt: string; name?: string; width?: number; height?: number; frameMs: number; error?: string; warning?: string }
+export type RenderJob = { id: string; draftId: string; revision: number; snapshot: Draft; preview: boolean; status: ClipStatus; progress?: number; stage?: string; error?: string; createdAt: string; name?: string; durationMs?: number; media?: RenderedMedia; rendererVersion?: number; subtitleStyle?: SubtitleStyleParams }
+export type CoverJob = { id: string; draftId: string; revision: number; snapshot: Draft; renderId?: string; cacheKey: string; status: ClipStatus; createdAt: string; name?: string; width?: number; height?: number; frameMs: number; error?: string; warning?: string; coverStyle?: CoverStyleParams }
 export type ClipProject = { schemaVersion: 1; documentId: string; sourceSignature: string; transcripts: TranscriptSnapshot[]; runs: AnalysisRun[]; candidates: Candidate[]; drafts: Draft[]; renders: RenderJob[]; covers?: CoverJob[]; updatedAt: string }
 export type ClippingState = { version: number; settings: CloudSettings }
 export const clipCommands = {
