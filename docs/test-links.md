@@ -33,3 +33,11 @@
 - GitHub Actions [运行 42176515966](https://github.com/bhwa233/galaxy-clipper/actions/runs/42176515966)：`verify`、Windows、macOS、Linux 构建及 Release 任务全部成功，基于提交 `924575aea5c587057def0ce5ba81cd4f6069f679`。
 - [0.1.0 开发预览](https://github.com/bhwa233/galaxy-clipper/releases/tag/0.1.0) 已发布 Windows x64 NSIS、macOS arm64 DMG 和 Linux x64 AppImage。
 - 该发布未验证课程素材完整流程、远端转写或云端服务；三个平台安装包尚未逐一进行安装后运行验收。
+
+## 工作区切换回归
+
+验证日期：2026-11-18（Asia/Shanghai）
+
+- 修复前在 Electron 44.4.5 中从「字幕」切到「AI 选片」可复现旧面板残留，同时显示六个面板。
+- 修复后分别用空项目和导入的临时 MP4 来回切换工具，始终只显示一组左栏、中央预览和右栏；有素材时只保留一个播放器。
+- `pnpm check` 通过；临时探针、素材和测试数据已清理。未调用云端服务。
