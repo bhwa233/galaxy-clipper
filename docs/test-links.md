@@ -130,3 +130,11 @@
   - `export captions` 写出 SRT；`export video --captions bilingual --method soft` 写出 MKV（zho / eng / zho 默认三条字幕轨）；`export video --method burn --style large` 写出 MP4，截帧确认大字风格。
   - 失败路径：输出文件已存在 → 退出码 1；无中英双语轨 → 2；未配置云端模型执行 `analyze` → 2；无候选执行 `drafts create` → 2；模型未安装执行 `subtitles recognize --wait` → 2；未知素材 → 1；通道地址不可达 → 4。
 - 未验证：安装版的命令注册与 PATH 写入（开发实例按设计不改 PATH，本轮未打包安装）；`analyze`、`drafts set`、`export clip`、`export cover` 的成功路径（需要云端文字模型配置）；客户端未运行时由安装版启动器自动后台启动。探针数据已删除。
+
+## 工作区切换回归
+
+验证日期：2026-11-18（Asia/Shanghai）
+
+- 修复前在 Electron 44.4.5 中从「字幕」切到「AI 选片」可复现旧面板残留，同时显示六个面板。
+- 修复后分别用空项目和导入的临时 MP4 来回切换工具，始终只显示一组左栏、中央预览和右栏；有素材时只保留一个播放器。
+- `pnpm check` 通过；临时探针、素材和测试数据已清理。未调用云端服务。
