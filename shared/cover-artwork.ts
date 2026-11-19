@@ -1,4 +1,5 @@
 import { coverPalettes, type CoverSettings } from './clipping'
+import { additionalCoverLayouts } from './cover-layouts'
 import { coverDefaults, type CoverStyleParams } from './styles'
 
 /** A cover style resolved from the library, plus the palette the user picked. */
@@ -55,6 +56,7 @@ ${portrait ? `${root} [data-cover-part="photo"]{top:26%;height:74%}${root} [data
 ${root} [data-cover-part="content"]{left:7%;top:5%;width:86%;height:43%;justify-content:flex-start;gap:${Math.round(width * .025)}px}${root} [data-cover-part="title"]{font-size:${Math.round(width * .108 * scale)}px;line-height:1.2}${root} [data-cover-part="subtitle"]{font-size:${Math.round(width * .037)}px}${root} [data-cover-part="badge"]{font-size:${Math.round(width * .03)}px}${root}.knowledge [data-cover-part="content"]{padding-left:3%}
 ${root}.game [data-cover-part="shade"]{background:linear-gradient(180deg,${canvas}ff 0%,${canvas}ef 37%,${canvas}22 80%)}
 ${root}.vlog [data-cover-part="photo"]{top:0;height:100%}${root}.vlog [data-cover-part="content"]{top:auto;bottom:6%;height:58%;width:86%}` : ''}
+${additionalCoverLayouts(root, portrait)}
 ${coverOverrides(root, params, width)}
 </style><div data-cover-artwork="${scope}" class="${layout}"><img data-cover-part="photo" src="${frame}" alt=""><div data-cover-part="shade"></div><section data-cover-part="content"><div data-cover-part="badge"></div><h1 data-cover-part="title"></h1><div data-cover-part="subtitle"></div><div data-cover-part="bar"></div></section></div>`
 }
@@ -82,7 +84,7 @@ export async function layoutCoverArtwork(root: HTMLElement, value: CoverArtworkT
     size -= 2; title.style.fontSize = size + 'px'
     subSize = Math.max(16, subSize - .5); subtitle.style.fontSize = subSize + 'px'
   }
-  if (value.portrait && value.style !== 'vlog') {
+  if (value.portrait && !['vlog', 'magazine', 'minimal', 'shortvideo'].includes(value.style)) {
     const bar = root.querySelector('[data-cover-part="bar"]') as HTMLElement
     const bottom = content.offsetTop + bar.offsetTop + bar.offsetHeight
     const top = Math.min(value.height * .52, Math.max(value.height * .25, bottom + value.height * .025))

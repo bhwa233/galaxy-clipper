@@ -22,7 +22,7 @@ export type TranscriptSnapshot = { id: string; trackId?: string; revision: numbe
 export type Candidate = { id: string; runId: string; transcriptId: string; startMs: number; endMs: number; title: string; reason: string; score: number }
 export type AnalysisWindow = { first: number; last: number; status: 'pending' | 'completed' | 'failed'; candidates: Candidate[]; error?: string }
 export type AnalysisRun = { id: string; transcriptId: string; cacheKey: string; options: AnalysisOptions; provider: Omit<ProviderSnapshot, 'credentialId'>; status: ClipStatus; windows: AnalysisWindow[]; createdAt: string; error?: string; candidateIds?: string[] }
-export const coverStyles = ['knowledge', 'interview', 'game', 'vlog', 'general'] as const
+export const coverStyles = ['knowledge', 'interview', 'game', 'vlog', 'general', 'chapter', 'keypoint', 'question', 'speaker', 'magazine', 'data', 'minimal', 'shortvideo'] as const
 // AutoClip's local cover palettes, migrated under MIT; see public/licenses/autoclip-cover-styles.txt.
 export const coverPalettes = {
   azure: { accent: '#5A8BFF', canvas: '#1A1A19' }, amber: { accent: '#F2B544', canvas: '#1B1712' },

@@ -11,6 +11,7 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { cn, formatDuration } from '@/lib/utils'
 import { Choice } from './Choice'
 import { TranscriptionMode } from './CloudServices'
+import { ModelWait } from './ModelWait'
 import { Blank, Panel, Stage, TaskCard, VideoPreview, rangeLabel } from './Panes'
 import { CaptionedVideo, StylePicker, styleParams } from './Styles'
 import type { Send } from '@/App'
@@ -28,10 +29,12 @@ export function useTrackSource() {
 export function TaskStatus({ document, send }: { document: ProcessingDocument; send: Send }) {
   const { t: p } = useTranslation('processing'), { t: c } = useTranslation('clipping')
   const busy = document.status === 'running' || document.status === 'queued'
-  const interesting = busy || document.error || document.retryable || document.status === 'waiting-model'
-  return <TaskCard status={interesting ? p(`statuses.${document.status}`) : undefined} detail={document.stage ? p(`stages.${document.stage}` as 'stages.recognizing', { defaultValue: document.stage }) : undefined} progress={busy ? document.progress || 0 : undefined} eta={busy ? document.eta : undefined} error={document.error} onCancel={busy ? () => void send('processing:cancel', { id: document.id }) : undefined}>
+  const cancellable = busy || document.status === 'waiting-model'
+  const interesting = cancellable || document.error || document.retryable
+  const missingModel = document.status === 'waiting-model' ? document.model : undefined
+  return <TaskCard status={interesting ? p(`statuses.${document.status}`) : undefined} detail={document.stage && document.status !== 'cancelled' ? p(`stages.${document.stage}` as 'stages.recognizing', { defaultValue: document.stage }) : undefined} progress={document.status === 'running' ? document.progress || null : undefined} eta={busy ? document.eta : undefined} error={document.error} onCancel={cancellable ? () => void send('processing:cancel', { id: document.id }) : undefined}>
     {document.retryable && <Button size="sm" variant="outline" onClick={() => void send('processing:retry', { id: document.id })}>{c('retryTranscription')}</Button>}
-    {document.status === 'waiting-model' && document.model && <Button size="sm" onClick={() => void send('models:download', { id: document.model! })}><Download data-icon="inline-start" />{p('downloadContinue')}</Button>}
+    {missingModel && <Button size="sm" onClick={() => void send('models:download', { id: missingModel })}><Download data-icon="inline-start" />{p('downloadContinue')}</Button>}
   </TaskCard>
 }
 
@@ -82,10 +85,10 @@ export function SubtitleWorkspace({ state, document, send, settings }: { state: 
     </form> : t('subtitlePage.editHint')}>
     {frame ? <img alt={t('subtitlePage.realFrame')} src={frame} className="max-h-full max-w-full rounded-lg object-contain" /> : audioOnly(document) ? <VideoPreview document={document} player={player} /> : <CaptionedVideo document={document} player={player} params={params} rows={[shown]} onTimeUpdate={() => setNow((player.current?.currentTime || 0) * 1000)} />}
   </Stage><Panel side="inspector" title={t('subtitlePage.sources.title')}>
-    <TaskStatus document={document} send={send} />
+    {document.status === 'waiting-model' ? <ModelWait key={document.id} document={document} models={state.processing.models} send={send} manageModels={() => settings('models')} /> : <TaskStatus document={document} send={send} />}
     <ToggleGroup variant="outline" size="sm" value={[mode]} onValueChange={values => { if (values[0]) setMode(values[0] as SourceMode) }} aria-label={t('subtitlePage.add')} className="grid w-full grid-cols-3">{(['platform', 'recognize', 'file'] as const).map(value => <ToggleGroupItem key={value} value={value}>{t(`subtitlePage.modes.${value}`)}</ToggleGroupItem>)}</ToggleGroup>
     {mode === 'platform' && <PlatformCaptions key={document.id} document={document} languages={state.settings.captionLanguages} send={send} disabled={busy || requesting} />}
-    {mode === 'recognize' && <><FieldGroup><TranscriptionMode settings={state.clipping.settings} send={send} disabled={busy || requesting} />{remote ? <p className="text-xs leading-relaxed text-muted-foreground">{c('remoteHint')}</p> : <Choice label={p('model')} value={model} disabled={busy} onChange={value => setModel(value as ModelId)} options={state.processing.models.filter(item => item.id !== 'speaker').map(item => ({ value: item.id, label: item.name + (item.ready ? ' ✓' : '') }))} />}<Choice label={p('speakers')} value={String(speakers)} disabled={busy} onChange={value => setSpeakers(value === 'auto' ? 'auto' : Number(value))} options={[{ value: 'auto', label: p('auto') }, ...Array.from({ length: 8 }, (_, i) => ({ value: String(i + 1), label: String(i + 1) }))]} /></FieldGroup>
+    {mode === 'recognize' && document.status !== 'waiting-model' && <><FieldGroup><TranscriptionMode settings={state.clipping.settings} send={send} disabled={busy || requesting} />{remote ? <p className="text-xs leading-relaxed text-muted-foreground">{c('remoteHint')}</p> : <Choice label={p('model')} value={model} disabled={busy} onChange={value => setModel(value as ModelId)} options={state.processing.models.filter(item => item.id !== 'speaker').map(item => ({ value: item.id, label: item.name + (item.ready ? ' ✓' : '') }))} />}<Choice label={p('speakers')} value={String(speakers)} disabled={busy} onChange={value => setSpeakers(value === 'auto' ? 'auto' : Number(value))} options={[{ value: 'auto', label: p('auto') }, ...Array.from({ length: 8 }, (_, i) => ({ value: String(i + 1), label: String(i + 1) }))]} /></FieldGroup>
       <Button disabled={busy || requesting} onClick={() => void run('recognize')}><Mic data-icon="inline-start" />{t('subtitlePage.recognize')}</Button>
       {document.captions.length > 0 && <Button variant="outline" disabled={busy || requesting} onClick={() => void run('speakers')}>{p('diarize')}</Button>}
       <Button variant="ghost" onClick={() => settings(remote ? 'cloud' : 'models')}>{t(remote ? 'cloudSettings' : 'manageModels')}</Button></>}

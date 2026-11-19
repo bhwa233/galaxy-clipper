@@ -21,12 +21,11 @@ import { draftSaveSchema, type AnalysisOptions, type ClipProject, type Draft } f
 import type { ProcessingDocument } from '../../../shared/processing'
 import { outputResolution } from '../../../shared/processing'
 
-type Props={tool:Tool;document?:ProcessingDocument;state:ClientState;send:Send;setTool:(tool:Tool)=>void;actions:HTMLElement|null;settings:(section:'cloud')=>void;project?:ClipProject;adopt:(project:ClipProject)=>void;draftId:string;chooseDraft:(id:string)=>void}
+type Props={tool:Tool;document?:ProcessingDocument;state:ClientState;send:Send;setTool:(tool:Tool)=>void;actions:HTMLElement|null;settings:(section:'cloud')=>void;project?:ClipProject;adopt:(project:ClipProject)=>void;draft?:Draft;chooseDraft:(id:string)=>void}
 /** ③ AI selection, ④ drafts and ⑤ cover. The clip project is loaded once by the shell. */
 export function ClippingWorkspace(props:Props) {
-  const {document,tool,project,adopt,draftId,chooseDraft}=props
+  const {document,tool,project,adopt,draft,chooseDraft}=props
   if(!['analysis','drafts','cover'].includes(tool))return null
-  const draft=project?.drafts.find(draft=>draft.id===draftId) || project?.drafts[0]
   if(tool==='analysis') return <CandidateWorkspace {...props} project={project} adopt={adopt} choose={chooseDraft} />
   if(!document || !project || !draft) return <EmptyDraftWorkspace {...props} />
   return <DraftWorkspace key={draft.id} {...props} document={document} project={project} value={draft} choose={chooseDraft} adopt={adopt} />
@@ -73,7 +72,7 @@ function DraftWorkspace({tool,state,document,project,value,send,choose,adopt,act
   const move=(index:number,delta:number)=>{const next=index+delta;if(next<0 || next>=draft.scenes.length)return;const scenes=[...draft.scenes];[scenes[index],scenes[next]]=[scenes[next],scenes[index]];patch({scenes})}
   const duplicate=async()=>{setBusy(true);const reply=await send('clipping:duplicate',{documentId:project.documentId,draftId:draft.id,draft:{...draft,documentId:project.documentId}});if(reply?.clipProject){adopt(reply.clipProject);choose(reply.clipProject.drafts[0].id)};setBusy(false)}
   const headingActions=<><span className="hidden text-xs text-muted-foreground min-[1450px]:block">{dirty ? t('workingCopy'):c('version',{revision:draft.revision})}</span><Button size="sm" variant="outline" disabled={busy || !dirty || !usable} onClick={()=>void save()}><Save data-icon="inline-start" />{c('saveDraft')}</Button>{tool==='drafts' && <Button size="sm" variant="outline" disabled={busy || !!running || !usable || !draft.scenes.length} onClick={()=>void render()}><Play data-icon="inline-start" />{t('updatePreview')}</Button>}</>
-  if(tool==='cover')return <>{actions && createPortal(headingActions,actions)}<CoverWorkspace state={state} project={project} draft={draft} usable={usable && !busy} patch={cover=>settings({cover})} send={send} choose={choose} /></>
+  if(tool==='cover')return <>{actions && createPortal(headingActions,actions)}<CoverWorkspace state={state} project={project} draft={draft} savedCover={value.settings.cover} usable={usable && !busy} patch={cover=>settings({cover})} send={send} choose={choose} /></>
   return <>{actions && createPortal(headingActions,actions)}<Panel side="library" title={t('drafts')} detail={t('sceneCount',{count:draft.scenes.length})} actions={<Button size="icon-sm" variant="ghost" disabled={busy || !usable} onClick={()=>void duplicate()} aria-label={c('duplicate')}><Copy /></Button>}>
     <Choice label={c('chooseDraft')} value={draft.id} disabled={busy} onChange={choose} options={project.drafts.map(draft=>({value:draft.id,label:draft.title}))} />
     <div className="flex items-center justify-between"><span className="text-xs text-muted-foreground">{c('scene')}</span><span className="text-xs tabular-nums text-muted-foreground">{formatDuration(draft.scenes.reduce((sum,scene)=>sum+scene.endMs-scene.startMs,0)/1000)}</span></div>

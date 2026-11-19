@@ -63,7 +63,7 @@
   "videoSettings": "画面与声音",
   "projectActions": "草稿操作",
   "editCover": "编辑封面",
-  "coverStyles": "五种实时风格",
+  "coverStyles": "实时封面风格",
   "language": "界面语言",
   "theme": "主题",
   "dark": "深色",
@@ -89,7 +89,7 @@
       "media": "素材",
       "subtitles": "字幕",
       "analysis": "AI 选片",
-      "drafts": "草稿",
+      "drafts": "剪辑",
       "cover": "封面",
       "export": "导出"
     },

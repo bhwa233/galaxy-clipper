@@ -193,12 +193,18 @@ export class Controller {
         }
         case 'processing:platform': { const value = commandSchemas[command].parse(input); document = await this.processing.platform(value.id, value.url, value.automatic); break }
         case 'processing:export': {
-          const { id, format, captions, style } = commandSchemas[command].parse(input), doc = this.processing.get(id)
-          const ext = ['soft', 'burn', 'video'].includes(format) ? this.settings.outputFormat : format
-          const selected = await dialog.showSaveDialog(this.window()!, { defaultPath: path.join(this.settings.outputDirectory, doc.title.replace(/[<>:"/\\|?*]/g, '_') + '.processed.' + ext), filters: [{ name: ext.toUpperCase(), extensions: [ext] }] })
+          const { id, draftId, format, captions, style } = commandSchemas[command].parse(input), doc = this.processing.get(id)
+          const video = ['soft', 'burn', 'video'].includes(format), ext = video ? this.settings.outputFormat : format
+          const title = (video && draftId ? this.clipping.get(id).drafts.find(draft => draft.id === draftId)?.title.trim() : undefined) || doc.title
+          const selected = await dialog.showSaveDialog(this.window()!, { defaultPath: path.join(this.settings.outputDirectory, title.replace(/[<>:"/\\|?*]/g, '_') + '.processed.' + ext), filters: [{ name: ext.toUpperCase(), extensions: [ext] }] })
           if (!selected.canceled && selected.filePath) document = await this.processing.export(id, format, selected.filePath, { captions, style: this.styles.subtitleParams(style || doc.subtitleStyle) }); break
         }
-        case 'processing:open-export': { const value = commandSchemas[command].parse(input); const message = await shell.openPath(this.processing.exportPath(value.id, value.index)); if (message) throw new Error(message); break }
+        case 'processing:open-export': {
+          const value = commandSchemas[command].parse(input), file = this.processing.exportPath(value.id, value.index)
+          if (value.reveal) shell.showItemInFolder(file)
+          else { const message = await shell.openPath(file); if (message) throw new Error(message) }
+          break
+        }
         case 'models:download': {
           const { id } = commandSchemas[command].parse(input)
           void this.processing.models.download(id).catch(error => log.warn('Model download failed', error)); break
@@ -214,6 +220,7 @@ export class Controller {
     } catch(error) { return {ok:false,message:redact(error instanceof Error ? error.message : String(error))} }
   }
   processingMedia(id: string): string {return this.processing.media(id)}
+  processingExport(id: string, index: number): string {return this.processing.exportPath(id, index)}
   clippingMedia(id:string,taskId:string):string {return this.clipping.media(id,taskId)}
   clippingCover(id:string,coverId:string):string {return this.clipping.coverMedia(id,coverId)}
   clippingCoverFont(weight: 'bold' | 'regular' = 'bold'):string {return path.join(path.dirname(this.engine.ffmpeg),'fonts',weight === 'bold' ? 'NotoSansCJKsc-Bold.otf' : 'NotoSansCJKsc-Regular.otf')}

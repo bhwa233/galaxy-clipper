@@ -56,6 +56,14 @@ export const coverDefaults: Record<CoverLayout, CoverStyleParams> = {
   game: { layout: 'game', colors: null, titleWeight: 900, titleScale: 1, italic: true, stroke: true, shade: 1, saturation: .85, contrast: 1.13, badge: 'border', bar: true },
   vlog: { layout: 'vlog', colors: null, titleWeight: 600, titleScale: 1, italic: false, stroke: false, shade: 1, saturation: .82, contrast: 1, badge: 'plain', bar: true },
   general: { layout: 'general', colors: null, titleWeight: 700, titleScale: 1, italic: false, stroke: false, shade: 1, saturation: .1, contrast: 1, badge: 'plain', bar: true },
+  chapter: { layout: 'chapter', colors: null, titleWeight: 900, titleScale: 1, italic: false, stroke: false, shade: 1, saturation: 1, contrast: 1, badge: 'plain', bar: true },
+  keypoint: { layout: 'keypoint', colors: null, titleWeight: 900, titleScale: 1, italic: false, stroke: false, shade: 1, saturation: 1, contrast: 1, badge: 'plain', bar: true },
+  question: { layout: 'question', colors: null, titleWeight: 900, titleScale: 1, italic: false, stroke: false, shade: 1, saturation: 1, contrast: 1, badge: 'plain', bar: true },
+  speaker: { layout: 'speaker', colors: null, titleWeight: 900, titleScale: 1, italic: false, stroke: false, shade: 1, saturation: 1, contrast: 1, badge: 'plain', bar: true },
+  magazine: { layout: 'magazine', colors: null, titleWeight: 900, titleScale: 1, italic: false, stroke: false, shade: 1, saturation: 1, contrast: 1, badge: 'plain', bar: true },
+  data: { layout: 'data', colors: null, titleWeight: 900, titleScale: 1, italic: false, stroke: false, shade: 1, saturation: 1, contrast: 1, badge: 'plain', bar: true },
+  minimal: { layout: 'minimal', colors: null, titleWeight: 900, titleScale: 1, italic: false, stroke: false, shade: 1, saturation: 1, contrast: 1, badge: 'plain', bar: true },
+  shortvideo: { layout: 'shortvideo', colors: null, titleWeight: 900, titleScale: 1, italic: false, stroke: false, shade: 1, saturation: 1, contrast: 1, badge: 'plain', bar: true },
 }
 const epoch = '2026-11-06T00:00:00.000Z'
 export const builtInSubtitleStyles: SubtitleStyle[] = subtitleBuiltIns.map(id => ({ id, name: id, base: id, version: 1, updatedAt: epoch, builtIn: true, params: subtitleDefaults[id] }))

@@ -7,7 +7,7 @@ import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from '@/comp
 import { i18n, setLocale } from '../shared/i18n'
 import type { ClientState, Command, CommandInput, Reply } from '../shared/contracts'
 import type { ProcessingDocument } from '../shared/processing'
-import type { ClipProject } from '../shared/clipping'
+import type { ClipProject, Draft } from '../shared/clipping'
 import { cn } from '@/lib/utils'
 import { MediaWorkspace, SubtitleWorkspace } from '@/components/editor/SourceWorkspace'
 import { ClippingWorkspace } from '@/components/editor/ClippingWorkspace'
@@ -19,11 +19,11 @@ export type Send = <C extends Command>(name: C, input: CommandInput<C>) => Promi
 export default function App() { return <I18nextProvider i18n={i18n}><TooltipProvider><Editor /></TooltipProvider></I18nextProvider> }
 // The workflow, in order. Each step opens once the one before has produced what it needs.
 const steps = [{id:'media',icon:FolderOpen},{id:'subtitles',icon:Captions},{id:'analysis',icon:Sparkles},{id:'drafts',icon:Scissors},{id:'cover',icon:ImageIcon,optional:true},{id:'export',icon:Download}] as const
-function progress(document?: ProcessingDocument, project?: ClipProject) {
+function progress(document?: ProcessingDocument, project?: ClipProject, draft?: Draft) {
   const captions = Boolean(document?.captions.length), candidates = Boolean(project?.candidates.length), drafts = Boolean(project?.drafts.length)
   return {
     reachable: { media: true, subtitles: Boolean(document), analysis: captions, drafts: captions && candidates, cover: captions && drafts, export: captions } as Record<Tool, boolean>,
-    done: { media: Boolean(document), subtitles: captions, analysis: candidates, drafts, cover: Boolean(project?.covers?.some(job => job.status === 'completed')), export: false } as Record<Tool, boolean>,
+    done: { media: Boolean(document), subtitles: captions, analysis: candidates, drafts, cover: Boolean(draft?.settings.cover), export: false } as Record<Tool, boolean>,
   }
 }
 function Editor() {
@@ -60,7 +60,8 @@ function Editor() {
   // Progress ticks only reach the summary; overlay them so status, progress and ETA stay live.
   const documentValue=loaded?.id===selected ? (summary ? {...loaded,status:summary.status,stage:summary.stage,progress:summary.progress,eta:summary.eta,error:summary.error} : loaded) : undefined
   const clipProject=project?.documentId===selected ? project : undefined
-  const flow=progress(documentValue,clipProject)
+  const activeDraft=clipProject?.drafts.find(draft=>draft.id===draftId) || clipProject?.drafts[0]
+  const flow=progress(documentValue,clipProject,activeDraft)
   // Switching media can leave the current step without its prerequisites: step back to the last open one.
   useEffect(() => {if(documentValue && !flow.reachable[tool]) setTool([...steps].reverse().find(step=>flow.reachable[step.id])!.id)},[documentValue,flow.reachable,tool])
   const choose=(id:string)=>{setSelected(id);setDraftId('')}
@@ -76,8 +77,8 @@ function Editor() {
     })}</ol><div className="mt-auto flex flex-col gap-2"><Button variant="ghost" className="h-14 flex-col gap-1" onClick={()=>void importProject()} disabled={pending} aria-label={t('importProject')}><FolderOpen /><span className="text-[11px]">{t('migrate')}</span></Button><Button variant="ghost" className="h-14 flex-col gap-1" onClick={()=>setSettings('general')} aria-label={t('settings')}><Settings2 /><span className="text-[11px]">{t('settings')}</span></Button></div></nav>
     {tool==='media' && <MediaWorkspace state={state} document={documentValue} selected={selected} choose={choose} importMedia={importMedia} importProject={importProject} send={send} />}
     {tool==='subtitles' && <SubtitleWorkspace key={'subtitles-'+selected} state={state} document={documentValue} send={send} settings={setSettings} />}
-    <ClippingWorkspace key={'clipping-'+selected} tool={tool} document={documentValue} state={state} send={send} setTool={setTool} actions={actions} settings={setSettings} project={clipProject} adopt={setProject} draftId={draftId} chooseDraft={setDraftId} />
-    {tool==='export' && documentValue && <ExportWorkspace key={'export-'+selected} state={state} document={documentValue} project={clipProject} send={send} setTool={setTool} />}
+    <ClippingWorkspace key={'clipping-'+selected} tool={tool} document={documentValue} state={state} send={send} setTool={setTool} actions={actions} settings={setSettings} project={clipProject} adopt={setProject} draft={activeDraft} chooseDraft={setDraftId} />
+    {tool==='export' && documentValue && <ExportWorkspace key={'export-'+selected} state={state} document={documentValue} project={clipProject} activeDraftId={activeDraft?.id} send={send} setTool={setTool} />}
     {next && <div className="editor-next">{flow.reachable[next.id] ? <Button className="w-full" onClick={()=>setTool(next.id)}>{t('steps.next',{step:t(`steps.names.${next.id}`)})}<ArrowRight data-icon="inline-end" /></Button>:<p className="text-xs leading-relaxed text-muted-foreground">{t(`steps.locked.${next.id}`)}</p>}</div>}
     {error && <Alert variant="destructive" className="editor-error"><AlertDescription className="flex items-center gap-2"><span className="flex-1">{error}</span><Button size="icon-sm" variant="ghost" aria-label={t('dismiss')} onClick={()=>setError('')}><X /></Button></AlertDescription></Alert>}
     <EditorSettings state={state} send={send} section={settings} changeSection={setSettings} close={()=>setSettings(undefined)} />

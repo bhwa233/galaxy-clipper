@@ -13,6 +13,7 @@ export type CaptionTrack = { id: string; language: string; source: 'platform' | 
 export type ProcessingStatus = 'idle' | 'queued' | 'running' | 'waiting-model' | 'completed' | 'failed' | 'cancelled'
 export type ProcessingSummary = { id: string; title: string; sourceName: string; jobId?: string; durationSeconds: number; status: ProcessingStatus; stage?: string; progress?: number; error?: string; updatedAt: string; eta?: number; captionCount: number; language?: string; model?: ModelId; retryable?: boolean }
 export type ProcessingDocument = ProcessingSummary & { revision: number; captions: Caption[]; speakers: Speaker[]; tracks: CaptionTrack[]; activeTrack?: string; sourceUrl?: string; subtitleStyle?: string; bilingual?: { zh: Caption[]; en: Caption[] }; exports: { name: string; createdAt: string }[] }
+export const isVideoExport = (name: string): boolean => /\.(mp4|mkv)$/i.test(name)
 export type ModelStatus = { id: ModelId | 'speaker'; name: string; family: string; ready: boolean; downloading: boolean; phase?: 'downloading' | 'unpacking' | 'verifying'; bytes: number; expectedBytes: number; progress?: number; error?: string; recommended: boolean; license: string; languages: string[] }
 export type ProcessingSource = { jobId: string; title: string; sourceName: string }
 export type ProcessingState = { documents: ProcessingSummary[]; sources?: ProcessingSource[]; models: ModelStatus[]; runtime: string }

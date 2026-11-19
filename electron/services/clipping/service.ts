@@ -15,7 +15,7 @@ import type { CoverFrame } from '../../../shared/clipping'
 
 type StoredProject = ClipProject & { paths: Record<string, string> }
 const log = logger('clipping')
-const RENDERER_VERSION = 3
+const RENDERER_VERSION = 4
 export class ClippingService {
   private projects = new Map<string, StoredProject>()
   private active = new Map<string, { documentId: string; controller: AbortController }>()
@@ -226,7 +226,7 @@ export class ClippingService {
     if (!draft) throw clipError('notFound')
     return this.mappedCaptions(project, draft)
   }
-  private mappedCaptions(project: StoredProject, draft: Draft) {
+  private mappedCaptions(project: StoredProject, draft: Draft, includeWordTimings = false) {
     const transcript = project.transcripts.find(value => value.id === draft.transcriptId)
     if (!transcript) throw clipError('notFound')
     let offsetFrames = 0
@@ -238,7 +238,11 @@ export class ClippingService {
         const start = Math.max(scene.startMs, cue.startMs), end = Math.min(scene.endMs, cue.endMs)
         const startMs = Math.round(start - scene.startMs + offsetMs)
         const endMs = Math.round(Math.min(end - scene.startMs, durationMs) + offsetMs)
-        if (end > start && endMs > startMs) captions.push({ ...cue, id: randomUUID(), startMs, endMs, words: undefined })
+        if (end > start && endMs > startMs) {
+          const translate = (time: number) => Math.round(time - scene.startMs + offsetMs)
+          const words = includeWordTimings ? cue.words?.map(word => ({ ...word, startMs: translate(word.startMs), endMs: translate(word.endMs) })) : undefined
+          captions.push({ ...cue, id: randomUUID(), startMs, endMs, words })
+        }
       }
       offsetFrames += frames
     }
@@ -287,7 +291,7 @@ export class ClippingService {
         job.status = 'running'; job.stage = 'exporting'; this.save(project)
         mkdirSync(path.dirname(target), { recursive: true })
         mkdirSync(taskDirectory, { recursive: true })
-        const mapped = this.mappedCaptions(project, job.snapshot)
+        const mapped = this.mappedCaptions(project, job.snapshot, true)
         const result = await this.engine.request<{ durationMs: number; media?: RenderedMedia }>({ operation: 'clip-render', input, output: target, scenes: job.snapshot.scenes, clipSettings: job.snapshot.settings, clipCaptions: mapped.captions, clipSubtitleStyle: job.subtitleStyle, preview, clipTaskId: job.id, workDirectory: taskDirectory }, controller.signal, event => {
           if (event.kind === 'processing') { job.progress = event.progress; this.version++; this.changed() }
         })

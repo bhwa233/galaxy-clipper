@@ -19,18 +19,19 @@ export function Stage({ title, detail, actions, children, footer }: { title: str
 export function Blank({ title, detail, children }: { title: string; detail?: string; children?: ReactNode }) {
   return <Empty><EmptyHeader><EmptyMedia variant="icon"><Film /></EmptyMedia><EmptyTitle>{title}</EmptyTitle>{detail && <EmptyDescription>{detail}</EmptyDescription>}</EmptyHeader>{children}</Empty>
 }
-export function VideoPreview({ document, source, player, onTimeUpdate, onLoadedMetadata }: { document?: ProcessingDocument; source?: string; player?: RefObject<HTMLVideoElement | null>; onTimeUpdate?: () => void; onLoadedMetadata?: () => void }) {
+export function VideoPreview({ document, source, label, player, onTimeUpdate, onLoadedMetadata }: { document?: ProcessingDocument; source?: string; label?: string; player?: RefObject<HTMLVideoElement | null>; onTimeUpdate?: () => void; onLoadedMetadata?: () => void }) {
   const { t } = useTranslation('editor')
   if(!document) return <Blank title={t('emptyTitle')} detail={t('emptyHint')} />
-  return <video key={source || document.id} ref={player} src={source || 'galaxy-media://processing/' + document.id} controls preload="metadata" onTimeUpdate={onTimeUpdate} onLoadedMetadata={onLoadedMetadata} className={cn('max-h-full w-full rounded-lg bg-black object-contain', /\.(mp3|wav|m4a|flac|ogg|opus|aac)$/i.test(document.sourceName) && 'h-24')} aria-label={t(source ? 'draftPreview' : 'sourcePreview')} />
+  return <video key={source || document.id} ref={player} src={source || 'galaxy-media://processing/' + document.id} controls preload="metadata" onTimeUpdate={onTimeUpdate} onLoadedMetadata={onLoadedMetadata} className={cn('max-h-full w-full rounded-lg bg-black object-contain', /\.(mp3|wav|m4a|flac|ogg|opus|aac)$/i.test(document.sourceName) && 'h-24')} aria-label={label ?? t(source ? 'draftPreview' : 'sourcePreview')} />
 }
 /** Pinned to the top of the inspector so progress, time left and cancel never scroll away. */
-export function TaskCard({ status, detail, progress, eta, error, onCancel, children }: { status?: string; detail?: string; progress?: number; eta?: number; error?: string; onCancel?: () => void; children?: ReactNode }) {
+export function TaskCard({ status, detail, progress, eta, error, onCancel, children }: { status?: string; detail?: string; progress?: number | null; eta?: number; error?: string; onCancel?: () => void; children?: ReactNode }) {
   const { t } = useTranslation('editor')
+  const percent = typeof progress === 'number' ? Math.round(progress * 100) : null
   if (!status && !error) return null
   return <div className="sticky -top-4 z-10 -mx-4 -mt-4 flex flex-col gap-2 border-b bg-card/95 p-4 backdrop-blur" role="status">
     {status && <div className="flex items-center gap-2"><Badge variant="secondary">{status}</Badge>{detail && <span className="truncate text-xs text-muted-foreground">{detail}</span>}</div>}
-    {progress !== undefined && <Progress value={progress * 100} />}
+    {progress !== undefined && <Progress value={percent} aria-label={detail || status}>{percent !== null && <span className="ml-auto text-xs tabular-nums text-muted-foreground">{percent}%</span>}</Progress>}
     {eta !== undefined && <span className="text-xs text-muted-foreground">{t('export.eta', { time: formatDuration(eta) })}</span>}
     {onCancel && <Button size="sm" variant="outline" onClick={onCancel}><X data-icon="inline-start" />{t('cancel')}</Button>}
     {error && <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert>}

@@ -11,6 +11,8 @@ import subprocess
 import unicodedata
 from pathlib import Path
 
+from clip_subtitles import layout_clip_captions
+
 
 def milliseconds(value):
     hours, minutes, seconds, fraction = re.split(r'[:,.]', value)
@@ -157,7 +159,7 @@ def copy_fonts(fonts, directory):
             shutil.copyfile(Path(fonts) / name, target / name)
 
 
-def write_ass(filename, tracks, source_width, source_height, style=None):
+def write_ass(filename, tracks, source_width, source_height, style=None, *, clip_captions=None):
     """Render cue tracks with a library subtitle style on a 1080 short-edge canvas.
 
     `tracks` maps a role ('zh', 'en', 'other') to cues. With two tracks the first
@@ -192,6 +194,12 @@ Style: Default,Noto Sans CJK SC,{size},{primary},{primary},{outline_color},{back
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 '''
+    if clip_captions is not None:
+        pages = layout_clip_captions(clip_captions, width, size, margin_x + outline + shadow, style['maxLines'])
+        events = ''.join(f'Dialogue: 0,{timestamp(start, True)},{timestamp(end, True)},Default,,0,0,0,,{text}\n'
+                         for start, end, text in pages)
+        Path(filename).write_text(header + events, encoding='utf-8')
+        return
     roles = list(tracks)
     if len(roles) == 2 and style['order'] == 'en-first' and roles[0] == 'zh':
         roles.reverse()

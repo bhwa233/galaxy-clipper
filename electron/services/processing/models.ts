@@ -80,16 +80,22 @@ export class ModelManager {
   }
   private async hash(file: string): Promise<string> { const hash = createHash('sha256'); for await (const chunk of createReadStream(file)) hash.update(chunk); return hash.digest('hex') }
   private async downloadFile(url: string, destination: string, signal: AbortSignal, update: (bytes: number, total: number) => void): Promise<void> {
-    const response = await this.fetcher!(url, { signal })
-    if (!response.ok || !response.body) throw new Error(`Model download HTTP ${response.status}`)
-    const total = Number(response.headers.get('content-length')) || 0
-    mkdirSync(path.dirname(destination), { recursive: true })
-    let bytes = 0, last = 0
-    const stream = Readable.fromWeb(response.body as Parameters<typeof Readable.fromWeb>[0])
-    stream.on('data', (chunk: Buffer) => { bytes += chunk.length; if (Date.now() - last > 250) { update(bytes, total); last = Date.now() } })
-    await pipeline(stream, createWriteStream(destination, { mode: 0o600 }), { signal })
-    if (!bytes || total && total !== bytes) throw new Error('Model download was truncated')
-    update(bytes, total)
+    const idle = new AbortController(), transfer = AbortSignal.any([signal, idle.signal])
+    const timer = setTimeout(() => idle.abort(new Error('No model download data received for 60 seconds')), 60_000)
+    try {
+      const response = await this.fetcher!(url, { signal: transfer })
+      if (!response.ok || !response.body) throw new Error(`Model download HTTP ${response.status}`)
+      const total = Number(response.headers.get('content-length')) || 0
+      mkdirSync(path.dirname(destination), { recursive: true })
+      let bytes = 0, last = 0
+      const stream = Readable.fromWeb(response.body as Parameters<typeof Readable.fromWeb>[0])
+      stream.on('data', (chunk: Buffer) => { timer.refresh(); bytes += chunk.length; if (Date.now() - last > 250) { update(bytes, total); last = Date.now() } })
+      await pipeline(stream, createWriteStream(destination, { mode: 0o600 }), { signal: transfer })
+      if (!bytes || total && total !== bytes) throw new Error('Model download was truncated')
+      update(bytes, total)
+    } catch (error) {
+      throw idle.signal.aborted && !signal.aborted ? idle.signal.reason : error
+    } finally { clearTimeout(timer) }
   }
   download(id: ModelId | 'speaker'): Promise<void> {
     const existing = this.pending.get(id)
@@ -158,7 +164,7 @@ export class ModelManager {
       }
       writeFileSync(this.receipt(id) + '.tmp', JSON.stringify({ version: 1, files: specs.map(spec => spec.fileName) }), { mode: 0o600 })
       renameSync(this.receipt(id) + '.tmp', this.receipt(id))
-    } catch (error) { this.failures.set(id, signal.aborted ? 'Download cancelled' : String(error instanceof Error ? error.message : error)); throw error }
+    } catch (error) { if (!signal.aborted) this.failures.set(id, String(error instanceof Error ? error.message : error)); throw error }
     finally { rmSync(stage, { recursive: true, force: true }); this.active.delete(id); this.changed() }
   }
 }

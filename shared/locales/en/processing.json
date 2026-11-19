@@ -44,6 +44,15 @@
   "cancelDownload": "Cancel download",
   "needModel": "Download the selected model to continue automatically.",
   "downloadContinue": "Download model and continue",
+  "modelWait": {
+    "downloading": "Downloading",
+    "unpacking": "Unpacking",
+    "verifying": "Verifying",
+    "received": "Received {{size}}",
+    "failed": "Download failed",
+    "retry": "Retry download",
+    "cancelTranscription": "Cancel transcription"
+  },
   "emptyModel": "Not downloaded",
   "file": "Local / embedded captions",
   "platform": "Platform captions",

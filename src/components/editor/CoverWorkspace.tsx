@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Download } from 'lucide-react'
+import { Check, Download } from 'lucide-react'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -41,13 +42,14 @@ export function CoverPreview({state,draft,frame,error,dimensions,usable,look}:{s
   return <CoverArtwork settings={cover} look={look || coverParams(state,cover.style)} title={draft.title} frame={frame.dataUrl} {...dimensions} cropX={draft.settings.cropX} />
 }
 /** ⑤ Cover: style on the left, live artboard in the middle, text and framing on the right. */
-export function CoverWorkspace({state,project,draft,usable,patch,send,choose}:{state:ClientState;project:ClipProject;draft:Draft;usable:boolean;patch:(cover:CoverSettings)=>void;send:Send;choose:(id:string)=>void}) {
+export function CoverWorkspace({state,project,draft,savedCover,usable,patch,send,choose}:{state:ClientState;project:ClipProject;draft:Draft;savedCover?:CoverSettings;usable:boolean;patch:(cover:CoverSettings)=>void;send:Send;choose:(id:string)=>void}) {
   const {t}=useTranslation('clipping'),{t:e}=useTranslation('editor'),styleName=useStyleName()
   const {frame,error,dimensions,cover}=useCoverFrame(project,draft,usable)
   const change=(value:Partial<CoverSettings>)=>patch({...cover,...value}),identifier='clip-cover-'+draft.id
   const current=state.styles.cover.find(style=>style.id===cover.style) || state.styles.cover[0]
-  return <><style>{coverFontFace('galaxy-media://cover-font/bold')}</style><Panel side="library" title={e('cover')} detail={e('styles.coverTitle')}><Choice label={t('chooseDraft')} value={draft.id} onChange={choose} options={project.drafts.map(draft=>({value:draft.id,label:draft.title}))} />
-    <StylePicker kind="cover" value={current.id} onChange={style=>change({style})} state={state} send={send} frame={frame?.dataUrl} preview={look=><CoverPreview state={state} draft={draft} frame={frame} error={error} dimensions={dimensions} usable={usable} look={look} />} />
+  const coverStatus=JSON.stringify(draft.settings.cover)!==JSON.stringify(savedCover) ? 'unsaved' : savedCover ? 'configured' : 'unconfigured'
+  return <><style>{coverFontFace('galaxy-media://cover-font/bold')}</style><Panel side="library" title={e('cover')} detail={e('styles.coverTitle')} actions={<Badge variant={coverStatus==='configured' ? 'secondary':'outline'}>{coverStatus==='configured' && <Check data-icon="inline-start" />}{t(`cover.configuration.${coverStatus}`)}</Badge>}><Choice label={t('chooseDraft')} value={draft.id} onChange={choose} options={project.drafts.map(draft=>({value:draft.id,label:draft.title}))} />
+    <StylePicker kind="cover" value={draft.settings.cover ? current.id : ''} onChange={style=>change({style})} state={state} send={send} frame={frame?.dataUrl} preview={look=><CoverPreview state={state} draft={draft} frame={frame} error={error} dimensions={dimensions} usable={usable} look={look} />} />
     <p className="text-xs leading-relaxed text-muted-foreground">{t('cover.liveHint')}</p></Panel>
     <Stage title={e('coverPreview')} detail={styleName('cover',current)} footer={t('cover.liveHint')}>
       {frame ? <div style={{width:dimensions.height>dimensions.width ? `min(100%, calc((100vh - 200px) * ${dimensions.width/dimensions.height}))`:'100%'}} className="max-w-full" data-cover-preview><CoverPreview state={state} draft={draft} frame={frame} dimensions={dimensions} usable={usable} /></div>:<Blank title={error || t('cover.loadingFrame')} detail={!draft.scenes.length ? t('errors.empty'):undefined} />}

@@ -15,20 +15,21 @@ import { TaskStatus, cueAt, trackRole, useTrackSource } from './SourceWorkspace'
 import { coverFontFace } from '../../../shared/cover-artwork'
 import type { Send } from '@/App'
 import type { ClientState } from '../../../shared/contracts'
-import { outputResolution, type ProcessingDocument } from '../../../shared/processing'
+import { isVideoExport, outputResolution, type ProcessingDocument } from '../../../shared/processing'
 import type { ClipProject, Draft } from '../../../shared/clipping'
 
 type Target = { kind: 'captions' } | { kind: 'video' } | { kind: 'draft'; id: string } | { kind: 'cover'; id: string }
+type HistoryVideo = { kind: 'processing'; index: number } | { kind: 'clip'; id: string }
 type VideoOptions = { captions: 'none' | 'current' | 'bilingual'; method: 'soft' | 'burn'; style: string }
 const encode = (target: Target) => target.kind === 'draft' || target.kind === 'cover' ? `${target.kind}:${target.id}` : target.kind
 const decode = (value: string): Target => { const [kind, id] = value.split(':'); return kind === 'draft' || kind === 'cover' ? { kind, id } : { kind: kind as 'captions' | 'video' } }
 
 /** ⑥ Export: configure on the left, check the result in the middle, export and review history on the right. */
-export function ExportWorkspace({ state, document, project, send, setTool }: { state: ClientState; document: ProcessingDocument; project?: ClipProject; send: Send; setTool: (tool: Tool) => void }) {
+export function ExportWorkspace({ state, document, project, activeDraftId, send, setTool }: { state: ClientState; document: ProcessingDocument; project?: ClipProject; activeDraftId?: string; send: Send; setTool: (tool: Tool) => void }) {
   const { t } = useTranslation('editor'), { t: c } = useTranslation('clipping')
   const [target, setTarget] = useState<Target>({ kind: 'video' }), [format, setFormat] = useState<'srt' | 'vtt' | 'txt' | 'md'>('srt')
   const [video, setVideo] = useState<VideoOptions>({ captions: document.bilingual ? 'bilingual' : 'current', method: 'burn', style: document.subtitleStyle || 'classic' })
-  const [working, setWorking] = useState(false), [viewing, setViewing] = useState<string>()
+  const [working, setWorking] = useState(false), [viewing, setViewing] = useState<HistoryVideo>()
   const drafts = project?.drafts || [], draft = target.kind === 'draft' || target.kind === 'cover' ? drafts.find(item => item.id === target.id) : undefined
   const chosen = draft ? target : target.kind === 'draft' || target.kind === 'cover' ? { kind: 'video' } as Target : target
   const options = [{ value: 'captions', label: t('export.targets.captions') }, { value: 'video', label: t('export.targets.video') }, ...drafts.map(item => ({ value: 'draft:' + item.id, label: t('export.targets.draft', { title: item.title }) })), ...drafts.map(item => ({ value: 'cover:' + item.id, label: t('export.targets.cover', { title: item.title }) }))]
@@ -53,7 +54,7 @@ export function ExportWorkspace({ state, document, project, send, setTool }: { s
       {chosen.kind === 'cover' && coverRunning && latestCover && <TaskCard status={c(`statuses.${latestCover.status}`)} onCancel={() => void send('clipping:cancel', { documentId: document.id, taskId: latestCover.id })} />}
       <div className="flex flex-col gap-1"><span className="text-xs text-muted-foreground">{t('outputDirectory')}</span><span className="break-all text-xs">{state.settings.outputDirectory}</span><Button size="sm" variant="ghost" className="self-start" onClick={() => void send('settings:directory', null)}><FolderOpen data-icon="inline-start" />{t('chooseDirectory')}</Button></div>
       {chosen.kind === 'captions' && <Button disabled={working || busy || !document.captions.length} onClick={() => run(send('processing:export', { id: document.id, format }))}><Download data-icon="inline-start" />{t('export.exportFile', { format: format.toUpperCase() })}</Button>}
-      {chosen.kind === 'video' && <Button disabled={working || busy || video.captions === 'bilingual' && !document.bilingual} onClick={() => run(send('processing:export', { id: document.id, format: video.captions === 'none' ? 'video' : video.method, captions: video.captions === 'bilingual' ? 'bilingual' : 'current', style: video.style }))}><Download data-icon="inline-start" />{t('export.exportVideo')}</Button>}
+      {chosen.kind === 'video' && <Button disabled={working || busy || video.captions === 'bilingual' && !document.bilingual} onClick={() => run(send('processing:export', { id: document.id, draftId: activeDraftId, format: video.captions === 'none' ? 'video' : video.method, captions: video.captions === 'bilingual' ? 'bilingual' : 'current', style: video.style }))}><Download data-icon="inline-start" />{t('export.exportVideo')}</Button>}
       {chosen.kind === 'draft' && draft && <><Button disabled={working || !!draftRunning || !draft.scenes.length} onClick={() => run(send('clipping:render', { documentId: document.id, draftId: draft.id, revision: draft.revision, preview: false }))}><Download data-icon="inline-start" />{t('export.exportClip')}</Button><div className="flex gap-2">{(['srt', 'vtt'] as const).map(value => <Button key={value} size="sm" variant="outline" disabled={!draft.scenes.length} onClick={() => void send('clipping:captions', { documentId: document.id, draftId: draft.id, format: value })}>{t('export.clipCaptions', { format: value.toUpperCase() })}</Button>)}</div></>}
       {chosen.kind === 'cover' && draft && <>{latestCover?.status === 'completed' ? <CoverFile documentId={document.id} cover={latestCover} send={send} /> : <Button disabled={working || !!coverRunning || !draft.scenes.length} onClick={() => run(send('clipping:cover', { documentId: document.id, draftId: draft.id, revision: draft.revision }))}><ImageIcon data-icon="inline-start" />{c('cover.generate')}</Button>}{latestCover?.error && <Alert variant="destructive"><AlertDescription>{latestCover.error}</AlertDescription></Alert>}</>}
       <ExportHistory document={document} project={project} send={send} view={setViewing} />
@@ -84,10 +85,12 @@ function DraftSummary({ state, draft, setTool }: { state: ClientState; draft: Dr
   return <><dl className="editor-metadata"><dt>{t('sceneCount', { count: draft.scenes.length })}</dt><dd>{formatDuration(draft.scenes.reduce((sum, scene) => sum + scene.endMs - scene.startMs, 0) / 1000)}</dd><dt>{c('aspect')}</dt><dd>{c(draft.settings.aspect)}</dd><dt>{c('resolution')}</dt><dd>{draft.settings.resolution === 'original' ? c('original') : draft.settings.resolution + 'p'}</dd><dt>{t('subtitles')}</dt><dd>{draft.settings.subtitles ? name('subtitle', style) : t('export.captionModes.none')}</dd><dt>{c('version', { revision: draft.revision })}</dt><dd /></dl><p className="text-xs leading-relaxed text-muted-foreground">{t('export.draftHint')}</p><Button variant="outline" onClick={() => setTool('drafts')}>{t('export.editDraft')}</Button></>
 }
 
-function ExportPreview({ state, document, project, target, format, video, draft, viewing, send }: { state: ClientState; document: ProcessingDocument; project?: ClipProject; target: Target; format: string; video: VideoOptions; draft?: Draft; viewing?: string; send: Send }) {
+function ExportPreview({ state, document, project, target, format, video, draft, viewing, send }: { state: ClientState; document: ProcessingDocument; project?: ClipProject; target: Target; format: string; video: VideoOptions; draft?: Draft; viewing?: HistoryVideo; send: Send }) {
   const { t } = useTranslation('editor'), { t: c } = useTranslation('clipping')
   const player = useRef<HTMLVideoElement>(null), [now, setNow] = useState(0)
-  const viewed = viewing && project?.renders.find(job => job.id === viewing && job.status === 'completed')
+  const exported = viewing?.kind === 'processing' ? document.exports[viewing.index] : undefined
+  if (viewing?.kind === 'processing' && exported && isVideoExport(exported.name)) return <Stage title={t('preview')} detail={exported.name}><VideoPreview document={document} source={`galaxy-media://processing-export/${document.id}/${viewing.index}`} label={t('preview')} /></Stage>
+  const viewed = viewing?.kind === 'clip' && project?.renders.find(job => job.id === viewing.id && job.status === 'completed')
   if (viewed) return <Stage title={t('draftPreview')} detail={`${viewed.snapshot.title} · ${viewed.name || ''}`}><VideoPreview document={document} source={'galaxy-media://clipping/' + document.id + '/' + viewed.id} /></Stage>
   if (target.kind === 'captions') return <Stage title={t('export.filePreview')} detail={document.tracks.find(track => track.id === document.activeTrack)?.name}><pre className="size-full overflow-auto whitespace-pre-wrap rounded-lg border bg-card p-4 text-xs leading-relaxed">{document.captions.slice(0, 200).map((cue, index) => format === 'srt' ? `${index + 1}\n${rangeLabel(cue.startMs, cue.endMs)}\n${cue.text}` : format === 'vtt' ? `${rangeLabel(cue.startMs, cue.endMs)}\n${cue.text}` : cue.text).join('\n\n')}</pre></Stage>
   if (target.kind === 'video') {
@@ -108,12 +111,16 @@ function CoverStage({ state, project, draft }: { state: ClientState; project: Cl
 }
 
 /** Everything exported from this media: subtitle files, videos, clips and covers. */
-function ExportHistory({ document, project, send, view }: { document: ProcessingDocument; project?: ClipProject; send: Send; view: (renderId: string) => void }) {
+function ExportHistory({ document, project, send, view }: { document: ProcessingDocument; project?: ClipProject; send: Send; view: (video: HistoryVideo) => void }) {
   const { t } = useTranslation('editor'), { t: c } = useTranslation('clipping')
   type Item = { key: string; name: string; createdAt: string; status?: string; open?: () => void; reveal?: () => void; preview?: () => void }
   const items: Item[] = [
-    ...document.exports.map((file, index) => ({ key: 'file-' + index, name: file.name, createdAt: file.createdAt, open: () => void send('processing:open-export', { id: document.id, index }) })),
-    ...(project?.renders.filter(job => !job.preview) || []).map(job => ({ key: job.id, name: job.name || job.snapshot.title, createdAt: job.createdAt, status: job.status === 'completed' ? undefined : c(`statuses.${job.status}`), open: job.status === 'completed' ? () => void send('clipping:open', { documentId: document.id, taskId: job.id, reveal: false }) : undefined, reveal: job.status === 'completed' ? () => void send('clipping:open', { documentId: document.id, taskId: job.id, reveal: true }) : undefined, preview: job.status === 'completed' ? () => view(job.id) : undefined })),
+    ...document.exports.map((file, index) => {
+      const video = isVideoExport(file.name)
+      const open = (reveal = false) => void send('processing:open-export', { id: document.id, index, reveal })
+      return { key: 'file-' + index, name: file.name, createdAt: file.createdAt, open: () => open(), reveal: video ? () => open(true) : undefined, preview: video ? () => view({ kind: 'processing', index }) : undefined }
+    }),
+    ...(project?.renders.filter(job => !job.preview) || []).map(job => ({ key: job.id, name: job.name || job.snapshot.title, createdAt: job.createdAt, status: job.status === 'completed' ? undefined : c(`statuses.${job.status}`), open: job.status === 'completed' ? () => void send('clipping:open', { documentId: document.id, taskId: job.id, reveal: false }) : undefined, reveal: job.status === 'completed' ? () => void send('clipping:open', { documentId: document.id, taskId: job.id, reveal: true }) : undefined, preview: job.status === 'completed' ? () => view({ kind: 'clip', id: job.id }) : undefined })),
     ...(project?.covers?.filter(job => job.status === 'completed') || []).map(job => ({ key: job.id, name: job.name || job.snapshot.title + '.jpg', createdAt: job.createdAt, open: () => void send('clipping:cover-export', { documentId: document.id, coverId: job.id }) })),
   ].sort((a, b) => b.createdAt.localeCompare(a.createdAt))
   return <><div className="editor-section-title">{t('history')}</div>{!items.length && <p className="text-xs text-muted-foreground">{c('noExports')}</p>}<div className="flex flex-col gap-1.5">{items.map(item => <div key={item.key} className={cn('editor-list-item py-2')}><div className="flex items-center gap-2"><button className="min-w-0 flex-1 truncate text-left text-xs font-medium" disabled={!item.open} onClick={item.open}>{item.name}</button>{item.status && <Badge variant="outline">{item.status}</Badge>}</div><div className="mt-1 flex items-center gap-1 text-[11px] text-muted-foreground"><span>{new Date(item.createdAt).toLocaleString()}</span>{item.preview && <Button size="icon-xs" variant="ghost" className="ml-auto" aria-label={t('preview')} onClick={item.preview}><Play /></Button>}{item.reveal && <Button size="icon-xs" variant="ghost" aria-label={c('reveal')} onClick={item.reveal}><FolderOpen /></Button>}</div></div>)}</div></>

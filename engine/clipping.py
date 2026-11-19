@@ -103,8 +103,8 @@ def run(request, emit):
                 # The library style is laid out on the rendered canvas by the same
                 # ASS writer as source burn-in, so drafts and exports look alike.
                 canvas = inspect(ffmpeg, str(folder / 'part-0.mkv'), details=True)
-                cues = [(cue['startMs'], cue['endMs'], cue['text']) for cue in request['clipCaptions'] if cue['endMs'] > cue['startMs']]
-                write_ass(folder / 'captions.ass', {'other': cues}, canvas['width'], canvas['height'], request.get('clipSubtitleStyle'))
+                write_ass(folder / 'captions.ass', {}, canvas['width'], canvas['height'], request.get('clipSubtitleStyle'),
+                          clip_captions=request['clipCaptions'])
                 filters.append('ass=filename=captions.ass:fontsdir=fonts')
             if settings['title'].strip():
                 title = settings['title'].replace('\n', ' ').replace('\r', ' ')
